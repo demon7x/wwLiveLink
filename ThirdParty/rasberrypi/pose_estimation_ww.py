@@ -36,7 +36,7 @@ def log_udp_message(msg):
 # 스켈레톤 구조 메시지 전송 함수
 def send_skeleton_structure():
     skeleton_message = {
-        "mycharacter2": [
+        "mycharacter3": [
             {"Type": "CharacterSubject"},
             {"Name": "head", "Parent": "-1"},
             {"Name": "upperarm_l", "Parent": "1"},
@@ -60,7 +60,7 @@ def send_skeleton_structure():
 # 프레임별 애니메이션 메시지 전송 함수
 def send_frame_animation(bone_transforms):
     message = {
-        "mycharacter2": [
+        "mycharacter3": [
             {"Type": "CharacterAnimation"},
             *bone_transforms
         ]

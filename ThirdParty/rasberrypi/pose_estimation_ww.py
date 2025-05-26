@@ -146,7 +146,7 @@ def world_to_local_with_tpose(bone_world_positions, tpose_world_positions, tpose
             bone_local_positions.append(local_pos)
     return bone_local_positions
 
-def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=0.001):
+def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=0.01):
     x_pixel = x * img_w
     y_pixel = y * img_h
     x_unreal = (x_pixel - img_w / 2) * scale + tpose_loc[0]
@@ -162,7 +162,7 @@ def normalize_and_scale(points, key_height_cm=160):
     y_top = min(ys)
     y_bottom = max(ys)
     y_height = y_bottom - y_top if y_bottom > y_top else 1e-5
-    scale = key_height_cm / y_height
+    scale = key_height_cm / y_height / 100
     result = []
     for x, y, _ in points:
         x_new = (x - x_center) * scale

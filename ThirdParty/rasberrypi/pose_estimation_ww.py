@@ -19,6 +19,7 @@ from hailo_rpi_common import (
 )
 import socket
 import json
+from scipy.spatial.transform import Rotation as R
 
 # UDP 설정 (필요시 수정)
 UDP_IP = "192.168.0.255"  # 브로드캐스트 주소
@@ -171,6 +172,17 @@ def normalize_and_scale(points, key_height_cm=160):
         result.append([x_new, y_new, z_new])
     return result
 
+def two_bone_ik(start, mid, end):
+    upper = np.array(mid) - np.array(start)
+    lower = np.array(end) - np.array(mid)
+    if np.linalg.norm(upper) < 1e-6 or np.linalg.norm(lower) < 1e-6:
+        return [0,0,0,1], [0,0,0,1]
+    upper_norm = upper / np.linalg.norm(upper)
+    lower_norm = lower / np.linalg.norm(lower)
+    rot_shoulder = R.align_vectors([upper_norm], [[1,0,0]])[0].as_quat().tolist()
+    rot_elbow = R.align_vectors([lower_norm], [upper_norm])[0].as_quat().tolist()
+    return rot_shoulder, rot_elbow
+
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
 # -----------------------------------------------------------------------------------------------
@@ -256,14 +268,33 @@ def app_callback(pad, info, user_data):
                 [points[16].x(), points[16].y(), 0], # foot_r (right_ankle)
             ]
             bone_world_positions = normalize_and_scale(raw_points, key_height_cm=160)
-            # T-Pose 월드 위치도 같은 방식으로 변환
-            tpose_raw_points = TPOSE_BONE_LOCATIONS
-            tpose_world_positions = normalize_and_scale(tpose_raw_points, key_height_cm=160)
-            bone_local_positions = world_to_local_with_tpose(
-                bone_world_positions, tpose_world_positions, TPOSE_LOCAL_LOCATIONS, PARENT_INDICES
+            # IK 적용: 왼팔(upperarm_l, lowerarm_l, hand_l)
+            rot_upperarm_l, rot_lowerarm_l = two_bone_ik(
+                bone_world_positions[1], bone_world_positions[3], bone_world_positions[5]
             )
+            # IK 적용: 오른팔(upperarm_r, lowerarm_r, hand_r)
+            rot_upperarm_r, rot_lowerarm_r = two_bone_ik(
+                bone_world_positions[2], bone_world_positions[4], bone_world_positions[6]
+            )
+            # 나머지 본은 회전 [0,0,0,1]
+            bone_rotations = [
+                [0,0,0,1],         # head
+                rot_upperarm_l,    # upperarm_l
+                rot_upperarm_r,    # upperarm_r
+                rot_lowerarm_l,    # lowerarm_l
+                rot_lowerarm_r,    # lowerarm_r
+                [0,0,0,1],        # hand_l
+                [0,0,0,1],        # hand_r
+                [0,0,0,1],        # thigh_l
+                [0,0,0,1],        # thigh_r
+                [0,0,0,1],        # calf_l
+                [0,0,0,1],        # calf_r
+                [0,0,0,1],        # foot_l
+                [0,0,0,1],        # foot_r
+            ]
+            bone_local_positions = world_to_local_positions(bone_world_positions, PARENT_INDICES)
             bone_transforms = [
-                {"Location": bone_local_positions[i], "Rotation": [0,0,0,1], "Scale": [1,1,1]}
+                {"Location": bone_local_positions[i], "Rotation": bone_rotations[i], "Scale": [1,1,1]}
                 for i in range(len(bone_local_positions))
             ]
             send_frame_animation(bone_transforms)

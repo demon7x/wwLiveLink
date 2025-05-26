@@ -103,6 +103,23 @@ PARENT_INDICES = [
     10,  # foot_r
 ]
 
+# T-Pose Local 위치값 (예시)
+TPOSE_LOCAL_LOCATIONS = [
+    [5.758485, 0.000000, 0.000000],      # head
+    [15.286094, 0.000000, 0.000000],     # upperarm_l
+    [-15.285989, 0.000005, -0.000402],   # upperarm_r
+    [27.090353, -0.000000, -0.000000],   # lowerarm_l
+    [-27.089924, 0.000000, -0.000000],   # lowerarm_r
+    [26.095160, -0.000000, 0.000000],    # hand_l
+    [-26.095495, 0.000000, 0.000000],    # hand_r
+    [-3.231992, 0.068032, -11.154586],   # thigh_l
+    [-3.232044, 0.067992, 11.154600],    # thigh_r
+    [-45.752037, -0.000000, 0.000000],   # calf_l
+    [45.751938, 0.000000, -0.000000],    # calf_r
+    [-41.705421, -0.000000, -0.000000],  # foot_l
+    [41.705467, 0.000000, 0.000000],     # foot_r
+]
+
 def world_to_local_positions(bone_world_positions, parent_indices):
     bone_local_positions = []
     for i, pos in enumerate(bone_world_positions):
@@ -112,6 +129,20 @@ def world_to_local_positions(bone_world_positions, parent_indices):
         else:
             parent_pos = bone_world_positions[parent_idx]
             local_pos = [p - q for p, q in zip(pos, parent_pos)]
+            bone_local_positions.append(local_pos)
+    return bone_local_positions
+
+def world_to_local_with_tpose(bone_world_positions, tpose_world_positions, tpose_local_positions, parent_indices):
+    bone_local_positions = []
+    for i, pos in enumerate(bone_world_positions):
+        parent_idx = parent_indices[i]
+        if parent_idx == -1:
+            bone_local_positions.append(tpose_local_positions[i])
+        else:
+            parent_pos = bone_world_positions[parent_idx]
+            tpose_parent_pos = tpose_world_positions[parent_idx]
+            delta = [ (p - q) - (tp - tq) for p, q, tp, tq in zip(pos, parent_pos, tpose_world_positions[i], tpose_parent_pos) ]
+            local_pos = [t + d for t, d in zip(tpose_local_positions[i], delta)]
             bone_local_positions.append(local_pos)
     return bone_local_positions
 
@@ -225,7 +256,12 @@ def app_callback(pad, info, user_data):
                 [points[16].x(), points[16].y(), 0], # foot_r (right_ankle)
             ]
             bone_world_positions = normalize_and_scale(raw_points, key_height_cm=160)
-            bone_local_positions = world_to_local_positions(bone_world_positions, PARENT_INDICES)
+            # T-Pose 월드 위치도 같은 방식으로 변환
+            tpose_raw_points = TPOSE_BONE_LOCATIONS
+            tpose_world_positions = normalize_and_scale(tpose_raw_points, key_height_cm=160)
+            bone_local_positions = world_to_local_with_tpose(
+                bone_world_positions, tpose_world_positions, TPOSE_LOCAL_LOCATIONS, PARENT_INDICES
+            )
             bone_transforms = [
                 {"Location": bone_local_positions[i], "Rotation": [0,0,0,1], "Scale": [1,1,1]}
                 for i in range(len(bone_local_positions))

@@ -146,7 +146,7 @@ def world_to_local_with_tpose(bone_world_positions, tpose_world_positions, tpose
             bone_local_positions.append(local_pos)
     return bone_local_positions
 
-def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=1.0):
+def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=0.01):
     x_pixel = x * img_w
     y_pixel = y * img_h
     x_unreal = (x_pixel - img_w / 2) * scale + tpose_loc[0]

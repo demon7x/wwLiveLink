@@ -84,6 +84,35 @@ TPOSE_BONE_LOCATIONS = [
     [-14.684455, 0.041339, 8.128632],    # foot_r
 ]
 
+# Parent 인덱스 (skeleton_message 순서와 일치)
+PARENT_INDICES = [
+    -1,  # head
+    0,   # upperarm_l
+    0,   # upperarm_r
+    1,   # lowerarm_l
+    2,   # lowerarm_r
+    3,   # hand_l
+    4,   # hand_r
+    0,   # thigh_l
+    0,   # thigh_r
+    7,   # calf_l
+    8,   # calf_r
+    9,   # foot_l
+    10,  # foot_r
+]
+
+def world_to_local_positions(bone_world_positions, parent_indices):
+    bone_local_positions = []
+    for i, pos in enumerate(bone_world_positions):
+        parent_idx = parent_indices[i]
+        if parent_idx == -1:
+            bone_local_positions.append(pos)
+        else:
+            parent_pos = bone_world_positions[parent_idx]
+            local_pos = [p - q for p, q in zip(pos, parent_pos)]
+            bone_local_positions.append(local_pos)
+    return bone_local_positions
+
 def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=0.01):
     x_pixel = x * img_w
     y_pixel = y * img_h
@@ -161,20 +190,25 @@ def app_callback(pad, info, user_data):
                 send_skeleton_structure()
                 skeleton_sent = True
             # T-Pose 기준 상대 위치로 변환
+            bone_world_positions = [
+                yolo_to_unreal_relative(points[0].x(), points[0].y(), width, height, TPOSE_BONE_LOCATIONS[0]),   # head (nose)
+                yolo_to_unreal_relative(points[5].x(), points[5].y(), width, height, TPOSE_BONE_LOCATIONS[1]),   # upperarm_l (left_shoulder)
+                yolo_to_unreal_relative(points[6].x(), points[6].y(), width, height, TPOSE_BONE_LOCATIONS[2]),   # upperarm_r (right_shoulder)
+                yolo_to_unreal_relative(points[7].x(), points[7].y(), width, height, TPOSE_BONE_LOCATIONS[3]),   # lowerarm_l (left_elbow)
+                yolo_to_unreal_relative(points[8].x(), points[8].y(), width, height, TPOSE_BONE_LOCATIONS[4]),   # lowerarm_r (right_elbow)
+                yolo_to_unreal_relative(points[9].x(), points[9].y(), width, height, TPOSE_BONE_LOCATIONS[5]),   # hand_l (left_wrist)
+                yolo_to_unreal_relative(points[10].x(), points[10].y(), width, height, TPOSE_BONE_LOCATIONS[6]), # hand_r (right_wrist)
+                yolo_to_unreal_relative(points[11].x(), points[11].y(), width, height, TPOSE_BONE_LOCATIONS[7]), # thigh_l (left_hip)
+                yolo_to_unreal_relative(points[12].x(), points[12].y(), width, height, TPOSE_BONE_LOCATIONS[8]), # thigh_r (right_hip)
+                yolo_to_unreal_relative(points[13].x(), points[13].y(), width, height, TPOSE_BONE_LOCATIONS[9]), # calf_l (left_knee)
+                yolo_to_unreal_relative(points[14].x(), points[14].y(), width, height, TPOSE_BONE_LOCATIONS[10]),# calf_r (right_knee)
+                yolo_to_unreal_relative(points[15].x(), points[15].y(), width, height, TPOSE_BONE_LOCATIONS[11]),# foot_l (left_ankle)
+                yolo_to_unreal_relative(points[16].x(), points[16].y(), width, height, TPOSE_BONE_LOCATIONS[12]),# foot_r (right_ankle)
+            ]
+            bone_local_positions = world_to_local_positions(bone_world_positions, PARENT_INDICES)
             bone_transforms = [
-                {"Location": yolo_to_unreal_relative(points[0].x(), points[0].y(), width, height, TPOSE_BONE_LOCATIONS[0]), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # head (nose)
-                {"Location": yolo_to_unreal_relative(points[5].x(), points[5].y(), width, height, TPOSE_BONE_LOCATIONS[1]), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_l (left_shoulder)
-                {"Location": yolo_to_unreal_relative(points[6].x(), points[6].y(), width, height, TPOSE_BONE_LOCATIONS[2]), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_r (right_shoulder)
-                {"Location": yolo_to_unreal_relative(points[7].x(), points[7].y(), width, height, TPOSE_BONE_LOCATIONS[3]), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_l (left_elbow)
-                {"Location": yolo_to_unreal_relative(points[8].x(), points[8].y(), width, height, TPOSE_BONE_LOCATIONS[4]), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_r (right_elbow)
-                {"Location": yolo_to_unreal_relative(points[9].x(), points[9].y(), width, height, TPOSE_BONE_LOCATIONS[5]), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # hand_l (left_wrist)
-                {"Location": yolo_to_unreal_relative(points[10].x(), points[10].y(), width, height, TPOSE_BONE_LOCATIONS[6]), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # hand_r (right_wrist)
-                {"Location": yolo_to_unreal_relative(points[11].x(), points[11].y(), width, height, TPOSE_BONE_LOCATIONS[7]), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_l (left_hip)
-                {"Location": yolo_to_unreal_relative(points[12].x(), points[12].y(), width, height, TPOSE_BONE_LOCATIONS[8]), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_r (right_hip)
-                {"Location": yolo_to_unreal_relative(points[13].x(), points[13].y(), width, height, TPOSE_BONE_LOCATIONS[9]), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_l (left_knee)
-                {"Location": yolo_to_unreal_relative(points[14].x(), points[14].y(), width, height, TPOSE_BONE_LOCATIONS[10]), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_r (right_knee)
-                {"Location": yolo_to_unreal_relative(points[15].x(), points[15].y(), width, height, TPOSE_BONE_LOCATIONS[11]), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_l (left_ankle)
-                {"Location": yolo_to_unreal_relative(points[16].x(), points[16].y(), width, height, TPOSE_BONE_LOCATIONS[12]), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_r (right_ankle)
+                {"Location": bone_local_positions[i], "Rotation": [0,0,0,1], "Scale": [1,1,1]}
+                for i in range(len(bone_local_positions))
             ]
             send_frame_animation(bone_transforms)
 

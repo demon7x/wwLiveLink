@@ -55,6 +55,7 @@ def send_skeleton_structure():
     }
     msg = json.dumps(skeleton_message).encode('utf-8')
     sock.sendto(msg, (UDP_IP, UDP_PORT))
+    log_udp_message(msg)
 
 # 프레임별 애니메이션 메시지 전송 함수
 def send_frame_animation(bone_transforms):
@@ -66,6 +67,7 @@ def send_frame_animation(bone_transforms):
     }
     msg = json.dumps(message).encode('utf-8')
     sock.sendto(msg, (UDP_IP, UDP_PORT))
+    log_udp_message(msg)
 
 # T-Pose 기준 본별 트랜스폼 (X, Y, Z)
 TPOSE_BONE_LOCATIONS = [
@@ -189,26 +191,21 @@ def app_callback(pad, info, user_data):
             if not skeleton_sent:
                 send_skeleton_structure()
                 skeleton_sent = True
-            # T-Pose 기준 상대 위치로 변환
-            bone_world_positions = [
-                yolo_to_unreal_relative(points[0].x(), points[0].y(), width, height, TPOSE_BONE_LOCATIONS[0]),   # head (nose)
-                yolo_to_unreal_relative(points[5].x(), points[5].y(), width, height, TPOSE_BONE_LOCATIONS[1]),   # upperarm_l (left_shoulder)
-                yolo_to_unreal_relative(points[6].x(), points[6].y(), width, height, TPOSE_BONE_LOCATIONS[2]),   # upperarm_r (right_shoulder)
-                yolo_to_unreal_relative(points[7].x(), points[7].y(), width, height, TPOSE_BONE_LOCATIONS[3]),   # lowerarm_l (left_elbow)
-                yolo_to_unreal_relative(points[8].x(), points[8].y(), width, height, TPOSE_BONE_LOCATIONS[4]),   # lowerarm_r (right_elbow)
-                yolo_to_unreal_relative(points[9].x(), points[9].y(), width, height, TPOSE_BONE_LOCATIONS[5]),   # hand_l (left_wrist)
-                yolo_to_unreal_relative(points[10].x(), points[10].y(), width, height, TPOSE_BONE_LOCATIONS[6]), # hand_r (right_wrist)
-                yolo_to_unreal_relative(points[11].x(), points[11].y(), width, height, TPOSE_BONE_LOCATIONS[7]), # thigh_l (left_hip)
-                yolo_to_unreal_relative(points[12].x(), points[12].y(), width, height, TPOSE_BONE_LOCATIONS[8]), # thigh_r (right_hip)
-                yolo_to_unreal_relative(points[13].x(), points[13].y(), width, height, TPOSE_BONE_LOCATIONS[9]), # calf_l (left_knee)
-                yolo_to_unreal_relative(points[14].x(), points[14].y(), width, height, TPOSE_BONE_LOCATIONS[10]),# calf_r (right_knee)
-                yolo_to_unreal_relative(points[15].x(), points[15].y(), width, height, TPOSE_BONE_LOCATIONS[11]),# foot_l (left_ankle)
-                yolo_to_unreal_relative(points[16].x(), points[16].y(), width, height, TPOSE_BONE_LOCATIONS[12]),# foot_r (right_ankle)
-            ]
-            bone_local_positions = world_to_local_positions(bone_world_positions, PARENT_INDICES)
+            # 변환 없이 points의 x, y 값을 그대로 사용
             bone_transforms = [
-                {"Location": bone_local_positions[i], "Rotation": [0,0,0,1], "Scale": [1,1,1]}
-                for i in range(len(bone_local_positions))
+                {"Location": [points[0].x(), points[0].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # head (nose)
+                {"Location": [points[5].x(), points[5].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_l (left_shoulder)
+                {"Location": [points[6].x(), points[6].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_r (right_shoulder)
+                {"Location": [points[7].x(), points[7].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_l (left_elbow)
+                {"Location": [points[8].x(), points[8].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_r (right_elbow)
+                {"Location": [points[9].x(), points[9].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # hand_l (left_wrist)
+                {"Location": [points[10].x(), points[10].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # hand_r (right_wrist)
+                {"Location": [points[11].x(), points[11].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_l (left_hip)
+                {"Location": [points[12].x(), points[12].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_r (right_hip)
+                {"Location": [points[13].x(), points[13].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_l (left_knee)
+                {"Location": [points[14].x(), points[14].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_r (right_knee)
+                {"Location": [points[15].x(), points[15].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_l (left_ankle)
+                {"Location": [points[16].x(), points[16].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_r (right_ankle)
             ]
             send_frame_animation(bone_transforms)
 

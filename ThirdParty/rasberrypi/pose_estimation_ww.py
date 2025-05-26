@@ -351,7 +351,9 @@ class GStreamerPoseEstimationApp(GStreamerApp):
         self.network_format = "RGB"
         self.default_postprocess_so = os.path.join(self.postprocess_dir, 'libyolov8pose_post.so')
         self.post_function_name = "filter"
-        self.hef_path = os.path.join(self.current_path, '../../Resources/hailo8l/pose_landmark_full.hef')
+        #self.hef_path = os.path.join(self.current_path, '../../Resources/hailo8l/pose_landmark_full.hef')
+        self.hef_path = os.path.join(self.current_path, 'yolov8s_pose_h8l_pi.hef')
+
         self.app_callback = app_callback
         
         # Set the process title

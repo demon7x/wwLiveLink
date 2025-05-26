@@ -84,7 +84,7 @@ TPOSE_BONE_LOCATIONS = [
     [-14.684455, 0.041339, 8.128632],    # foot_r
 ]
 
-def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=0.2):
+def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=0.01):
     x_pixel = x * img_w
     y_pixel = y * img_h
     x_unreal = (x_pixel - img_w / 2) * scale + tpose_loc[0]

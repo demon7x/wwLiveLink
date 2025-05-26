@@ -60,6 +60,17 @@ def send_frame_animation(bone_transforms):
     }
     msg = json.dumps(message).encode('utf-8')
     sock.sendto(msg, (UDP_IP, UDP_PORT))
+
+# YOLO/COCO 2D 좌표를 Unreal FVector로 변환
+# x, y: 정규화(0~1), img_w, img_h: 이미지 크기, scale: Unreal 단위 변환
+def yolo_to_unreal(x, y, img_w, img_h, scale=1.0):
+    x_pixel = x * img_w
+    y_pixel = y * img_h
+    x_unreal = (x_pixel - img_w / 2) * scale
+    y_unreal = - (y_pixel - img_h / 2) * scale  # y축 반전
+    z_unreal = 0
+    return [x_unreal, y_unreal, z_unreal]
+
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
 # -----------------------------------------------------------------------------------------------
@@ -128,21 +139,21 @@ def app_callback(pad, info, user_data):
             if not skeleton_sent:
                 send_skeleton_structure()
                 skeleton_sent = True
-            # Unreal 본 순서에 맞게 COCO keypoint를 매핑
+            # Unreal 본 순서에 맞게 COCO keypoint를 매핑 (Unreal FVector 변환 적용)
             bone_transforms = [
-                {"Location": [points[0].x(), points[0].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # head (nose)
-                {"Location": [points[5].x(), points[5].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_l (left_shoulder)
-                {"Location": [points[6].x(), points[6].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_r (right_shoulder)
-                {"Location": [points[7].x(), points[7].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_l (left_elbow)
-                {"Location": [points[8].x(), points[8].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_r (right_elbow)
-                {"Location": [points[9].x(), points[9].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # hand_l (left_wrist)
-                {"Location": [points[10].x(), points[10].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # hand_r (right_wrist)
-                {"Location": [points[11].x(), points[11].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_l (left_hip)
-                {"Location": [points[12].x(), points[12].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_r (right_hip)
-                {"Location": [points[13].x(), points[13].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_l (left_knee)
-                {"Location": [points[14].x(), points[14].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_r (right_knee)
-                {"Location": [points[15].x(), points[15].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_l (left_ankle)
-                {"Location": [points[16].x(), points[16].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_r (right_ankle)
+                {"Location": yolo_to_unreal(points[0].x(), points[0].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # head (nose)
+                {"Location": yolo_to_unreal(points[5].x(), points[5].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_l (left_shoulder)
+                {"Location": yolo_to_unreal(points[6].x(), points[6].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_r (right_shoulder)
+                {"Location": yolo_to_unreal(points[7].x(), points[7].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_l (left_elbow)
+                {"Location": yolo_to_unreal(points[8].x(), points[8].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_r (right_elbow)
+                {"Location": yolo_to_unreal(points[9].x(), points[9].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # hand_l (left_wrist)
+                {"Location": yolo_to_unreal(points[10].x(), points[10].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # hand_r (right_wrist)
+                {"Location": yolo_to_unreal(points[11].x(), points[11].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_l (left_hip)
+                {"Location": yolo_to_unreal(points[12].x(), points[12].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_r (right_hip)
+                {"Location": yolo_to_unreal(points[13].x(), points[13].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_l (left_knee)
+                {"Location": yolo_to_unreal(points[14].x(), points[14].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_r (right_knee)
+                {"Location": yolo_to_unreal(points[15].x(), points[15].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_l (left_ankle)
+                {"Location": yolo_to_unreal(points[16].x(), points[16].y(), width, height), "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_r (right_ankle)
             ]
             send_frame_animation(bone_transforms)
 

@@ -123,6 +123,23 @@ def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=0.01):
     z_unreal = tpose_loc[2]
     return [x_unreal, y_unreal, z_unreal]
 
+def normalize_and_scale(points, key_height_cm=160):
+    # points: [[x, y, 0], ...] (정규화 0~1)
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    x_center = sum(xs) / len(xs)
+    y_top = min(ys)
+    y_bottom = max(ys)
+    y_height = y_bottom - y_top if y_bottom > y_top else 1e-5
+    scale = key_height_cm / y_height
+    result = []
+    for x, y, _ in points:
+        x_new = (x - x_center) * scale
+        z_new = (1 - y) * scale  # y축 반전 후 z로
+        y_new = 0  # 2D이므로 y는 0(혹은 필요시 좌우로 이동)
+        result.append([x_new, y_new, z_new])
+    return result
+
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
 # -----------------------------------------------------------------------------------------------
@@ -191,21 +208,26 @@ def app_callback(pad, info, user_data):
             if not skeleton_sent:
                 send_skeleton_structure()
                 skeleton_sent = True
-            # 변환 없이 points의 x, y 값을 그대로 사용
+            # points에서 x, y만 추출하여 변환 함수 적용
+            raw_points = [
+                [points[0].x(), points[0].y(), 0],   # head (nose)
+                [points[5].x(), points[5].y(), 0],   # upperarm_l (left_shoulder)
+                [points[6].x(), points[6].y(), 0],   # upperarm_r (right_shoulder)
+                [points[7].x(), points[7].y(), 0],   # lowerarm_l (left_elbow)
+                [points[8].x(), points[8].y(), 0],   # lowerarm_r (right_elbow)
+                [points[9].x(), points[9].y(), 0],   # hand_l (left_wrist)
+                [points[10].x(), points[10].y(), 0], # hand_r (right_wrist)
+                [points[11].x(), points[11].y(), 0], # thigh_l (left_hip)
+                [points[12].x(), points[12].y(), 0], # thigh_r (right_hip)
+                [points[13].x(), points[13].y(), 0], # calf_l (left_knee)
+                [points[14].x(), points[14].y(), 0], # calf_r (right_knee)
+                [points[15].x(), points[15].y(), 0], # foot_l (left_ankle)
+                [points[16].x(), points[16].y(), 0], # foot_r (right_ankle)
+            ]
+            scaled_points = normalize_and_scale(raw_points, key_height_cm=160)
             bone_transforms = [
-                {"Location": [points[0].x(), points[0].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # head (nose)
-                {"Location": [points[5].x(), points[5].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_l (left_shoulder)
-                {"Location": [points[6].x(), points[6].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_r (right_shoulder)
-                {"Location": [points[7].x(), points[7].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_l (left_elbow)
-                {"Location": [points[8].x(), points[8].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_r (right_elbow)
-                {"Location": [points[9].x(), points[9].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # hand_l (left_wrist)
-                {"Location": [points[10].x(), points[10].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # hand_r (right_wrist)
-                {"Location": [points[11].x(), points[11].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_l (left_hip)
-                {"Location": [points[12].x(), points[12].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_r (right_hip)
-                {"Location": [points[13].x(), points[13].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_l (left_knee)
-                {"Location": [points[14].x(), points[14].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_r (right_knee)
-                {"Location": [points[15].x(), points[15].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_l (left_ankle)
-                {"Location": [points[16].x(), points[16].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_r (right_ankle)
+                {"Location": scaled_points[i], "Rotation": [0,0,0,1], "Scale": [1,1,1]}
+                for i in range(len(scaled_points))
             ]
             send_frame_animation(bone_transforms)
 

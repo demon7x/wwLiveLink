@@ -162,7 +162,7 @@ def normalize_and_scale(points, key_height_cm=160):
     y_top = min(ys)
     y_bottom = max(ys)
     y_height = y_bottom - y_top if y_bottom > y_top else 1e-5
-    scale = key_height_cm / y_height / 10.0
+    scale = key_height_cm / y_height / 100.0
     result = []
     for x, y, _ in points:
         x_new = (x - x_center) * scale

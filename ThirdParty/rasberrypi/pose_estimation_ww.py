@@ -20,6 +20,54 @@ from hailo_rpi_common import (
 import socket
 import json
 
+# UDP 설정 (필요시 수정)
+UDP_IP = "192.168.0.255"  # 브로드캐스트 주소
+UDP_PORT = 54321
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+skeleton_sent = False  # 스켈레톤 메시지 전송 여부 플래그
+
+# 스켈레톤 구조 메시지 전송 함수
+def send_skeleton_structure():
+    skeleton_message = {
+        "mycharacter2": [
+            {"Type": "CharacterSubject"},
+            {"Name": "root", "Parent": "-1"},
+            {"Name": "pelvis", "Parent": "0"},
+            {"Name": "spine_01", "Parent": "1"},
+            {"Name": "spine_02", "Parent": "2"},
+            {"Name": "spine_03", "Parent": "3"},
+            {"Name": "neck_01", "Parent": "4"},
+            {"Name": "head", "Parent": "5"},
+            {"Name": "clavicle_l", "Parent": "4"},
+            {"Name": "upperarm_l", "Parent": "8"},
+            {"Name": "lowerarm_l", "Parent": "9"},
+            {"Name": "hand_l", "Parent": "10"},
+            {"Name": "clavicle_r", "Parent": "4"},
+            {"Name": "upperarm_r", "Parent": "12"},
+            {"Name": "lowerarm_r", "Parent": "13"},
+            {"Name": "hand_r", "Parent": "14"},
+            {"Name": "thigh_l", "Parent": "1"},
+            {"Name": "calf_l", "Parent": "16"},
+            {"Name": "foot_l", "Parent": "17"},
+            {"Name": "thigh_r", "Parent": "1"},
+            {"Name": "calf_r", "Parent": "19"},
+            {"Name": "foot_r", "Parent": "20"},
+        ]
+    }
+    msg = json.dumps(skeleton_message).encode('utf-8')
+    sock.sendto(msg, (UDP_IP, UDP_PORT))
+
+# 프레임별 애니메이션 메시지 전송 함수
+def send_frame_animation(bone_transforms):
+    message = {
+        "mycharacter2": [
+            {"Type": "CharacterAnimation"},
+            *bone_transforms
+        ]
+    }
+    msg = json.dumps(message).encode('utf-8')
+    sock.sendto(msg, (UDP_IP, UDP_PORT))
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
 # -----------------------------------------------------------------------------------------------
@@ -229,52 +277,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     app = GStreamerPoseEstimationApp(args, user_data)
     app.run()
-
-# UDP 설정 (필요시 수정)
-UDP_IP = "192.168.0.255"  # 브로드캐스트 주소
-UDP_PORT = 54321
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-skeleton_sent = False  # 스켈레톤 메시지 전송 여부 플래그
-
-# 스켈레톤 구조 메시지 전송 함수
-def send_skeleton_structure():
-    skeleton_message = {
-        "mycharacter2": [
-            {"Type": "CharacterSubject"},
-            {"Name": "root", "Parent": "-1"},
-            {"Name": "pelvis", "Parent": "0"},
-            {"Name": "spine_01", "Parent": "1"},
-            {"Name": "spine_02", "Parent": "2"},
-            {"Name": "spine_03", "Parent": "3"},
-            {"Name": "neck_01", "Parent": "4"},
-            {"Name": "head", "Parent": "5"},
-            {"Name": "clavicle_l", "Parent": "4"},
-            {"Name": "upperarm_l", "Parent": "8"},
-            {"Name": "lowerarm_l", "Parent": "9"},
-            {"Name": "hand_l", "Parent": "10"},
-            {"Name": "clavicle_r", "Parent": "4"},
-            {"Name": "upperarm_r", "Parent": "12"},
-            {"Name": "lowerarm_r", "Parent": "13"},
-            {"Name": "hand_r", "Parent": "14"},
-            {"Name": "thigh_l", "Parent": "1"},
-            {"Name": "calf_l", "Parent": "16"},
-            {"Name": "foot_l", "Parent": "17"},
-            {"Name": "thigh_r", "Parent": "1"},
-            {"Name": "calf_r", "Parent": "19"},
-            {"Name": "foot_r", "Parent": "20"},
-        ]
-    }
-    msg = json.dumps(skeleton_message).encode('utf-8')
-    sock.sendto(msg, (UDP_IP, UDP_PORT))
-
-# 프레임별 애니메이션 메시지 전송 함수
-def send_frame_animation(bone_transforms):
-    message = {
-        "mycharacter2": [
-            {"Type": "CharacterAnimation"},
-            *bone_transforms
-        ]
-    }
-    msg = json.dumps(message).encode('utf-8')
-    sock.sendto(msg, (UDP_IP, UDP_PORT))

@@ -136,32 +136,21 @@ def app_callback(pad, info, user_data):
             if not skeleton_sent:
                 send_skeleton_structure()
                 skeleton_sent = True
-            # COCO → UE 본 매핑 (예시)
-            # 실제 매핑 순서와 개수는 스켈레톤 구조와 맞춰야 함
-            # points: [nose, left_eye, right_eye, ...] (COCO 순서)
-            # 아래는 예시 매핑 (실제 본 구조에 맞게 수정 필요)
+            # Unreal 본 순서에 맞게 COCO keypoint를 매핑
             bone_transforms = [
-                {"Location": [0, 0, 0], "Rotation": [0, 0, 0, 1], "Scale": [1, 1, 1]},  # root
-                {"Location": [points[11].x(), points[11].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # pelvis (left_hip)
-                {"Location": [points[5].x(), points[5].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # spine_01 (left_shoulder)
-                {"Location": [points[6].x(), points[6].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # spine_02 (right_shoulder)
-                {"Location": [points[0].x(), points[0].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # spine_03 (nose)
-                {"Location": [points[1].x(), points[1].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # neck_01 (left_eye)
-                {"Location": [points[2].x(), points[2].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # head (right_eye)
-                {"Location": [points[3].x(), points[3].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # clavicle_l (left_ear)
-                {"Location": [points[4].x(), points[4].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # upperarm_l (right_ear)
-                {"Location": [points[7].x(), points[7].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # lowerarm_l (left_elbow)
-                {"Location": [points[9].x(), points[9].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # hand_l (left_wrist)
-                {"Location": [points[8].x(), points[8].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # clavicle_r (right_elbow)
-                {"Location": [points[10].x(), points[10].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # upperarm_r (right_wrist)
-                {"Location": [points[12].x(), points[12].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # lowerarm_r (right_hip)
-                {"Location": [points[13].x(), points[13].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # hand_r (left_knee)
-                {"Location": [points[14].x(), points[14].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_l (right_knee)
-                {"Location": [points[15].x(), points[15].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_l (left_ankle)
-                {"Location": [points[16].x(), points[16].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_l (right_ankle)
-                {"Location": [0,0,0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_r (예시, 실제 매핑 필요)
-                {"Location": [0,0,0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_r (예시)
-                {"Location": [0,0,0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_r (예시)
+                {"Location": [points[0].x(), points[0].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # head (nose)
+                {"Location": [points[5].x(), points[5].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_l (left_shoulder)
+                {"Location": [points[6].x(), points[6].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # upperarm_r (right_shoulder)
+                {"Location": [points[7].x(), points[7].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_l (left_elbow)
+                {"Location": [points[8].x(), points[8].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # lowerarm_r (right_elbow)
+                {"Location": [points[9].x(), points[9].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},   # hand_l (left_wrist)
+                {"Location": [points[10].x(), points[10].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # hand_r (right_wrist)
+                {"Location": [points[11].x(), points[11].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_l (left_hip)
+                {"Location": [points[12].x(), points[12].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_r (right_hip)
+                {"Location": [points[13].x(), points[13].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_l (left_knee)
+                {"Location": [points[14].x(), points[14].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_r (right_knee)
+                {"Location": [points[15].x(), points[15].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_l (left_ankle)
+                {"Location": [points[16].x(), points[16].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_r (right_ankle)
             ]
             send_frame_animation(bone_transforms)
 

@@ -224,10 +224,11 @@ def app_callback(pad, info, user_data):
                 [points[15].x(), points[15].y(), 0], # foot_l (left_ankle)
                 [points[16].x(), points[16].y(), 0], # foot_r (right_ankle)
             ]
-            scaled_points = normalize_and_scale(raw_points, key_height_cm=160)
+            bone_world_positions = normalize_and_scale(raw_points, key_height_cm=160)
+            bone_local_positions = world_to_local_positions(bone_world_positions, PARENT_INDICES)
             bone_transforms = [
-                {"Location": scaled_points[i], "Rotation": [0,0,0,1], "Scale": [1,1,1]}
-                for i in range(len(scaled_points))
+                {"Location": bone_local_positions[i], "Rotation": [0,0,0,1], "Scale": [1,1,1]}
+                for i in range(len(bone_local_positions))
             ]
             send_frame_animation(bone_transforms)
 

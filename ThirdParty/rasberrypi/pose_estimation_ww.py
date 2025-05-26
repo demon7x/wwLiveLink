@@ -63,7 +63,7 @@ def send_frame_animation(bone_transforms):
 
 # YOLO/COCO 2D 좌표를 Unreal FVector로 변환
 # x, y: 정규화(0~1), img_w, img_h: 이미지 크기, scale: Unreal 단위 변환
-def yolo_to_unreal(x, y, img_w, img_h, scale=0.1):
+def yolo_to_unreal(x, y, img_w, img_h, scale=0.2):
     x_pixel = x * img_w
     y_pixel = y * img_h
     x_unreal = (x_pixel - img_w / 2) * scale

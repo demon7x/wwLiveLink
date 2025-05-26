@@ -13,7 +13,7 @@ def parse_args():
     parser.add_argument('--udp_port', type=int, default=54321, help='UDP 포트')
     parser.add_argument('--log', type=str, default='', help='로그 파일 경로(선택)')
     parser.add_argument('--hef', type=str, default='Resources/hailo8/pose_landmark_full.hef', help='HEF 파일 경로')
-    parser.add_argument('--camera', type=int, default=0, help='카메라 인덱스')
+    parser.add_argument('--source', type=str, default='0', help='카메라 인덱스(숫자) 또는 비디오 파일 경로')
     return parser.parse_args()
 
 POSE_BONE_NAMES = [
@@ -98,7 +98,12 @@ def main():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     log_file = args.log if args.log else None
     hef_path = args.hef
-    cam_idx = args.camera
+    # 입력 소스 처리
+    try:
+        cam_idx = int(args.source)
+        cap = cv2.VideoCapture(cam_idx)
+    except ValueError:
+        cap = cv2.VideoCapture(args.source)
 
     device = hailo.Device()
     network_group = device.create_hef(hef_path)
@@ -107,7 +112,6 @@ def main():
 
     with hailo.vstream.InputVStreams(network_group, [input_vstream_info]) as input_vstreams, \
          hailo.vstream.OutputVStreams(network_group, [output_vstream_info]) as output_vstreams:
-        cap = cv2.VideoCapture(cam_idx)
         frame_idx = 0
         subject_sent = False
         while True:

@@ -1,33 +1,21 @@
 import cv2
-import mediapipe as mp
 import socket
 import json
 import argparse
 import os
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import hailo
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='MediaPipe Pose UDP Broadcaster')
-    parser.add_argument('--source', type=str, default='0', help='입력 소스: 0(웹캠), 파일 경로(비디오/이미지)')
+    parser = argparse.ArgumentParser(description='Hailo Pose UDP Broadcaster')
     parser.add_argument('--udp_ip', type=str, default='255.255.255.255', help='UDP 브로드캐스트 IP')
     parser.add_argument('--udp_port', type=int, default=54321, help='UDP 포트')
     parser.add_argument('--log', type=str, default='', help='로그 파일 경로(선택)')
+    parser.add_argument('--hef', type=str, default='Resources/hailo8/pose_landmark_full.hef', help='HEF 파일 경로')
+    parser.add_argument('--camera', type=int, default=0, help='카메라 인덱스')
     return parser.parse_args()
 
-def get_video_capture(source):
-    # source가 숫자면 웹캠, 아니면 파일
-    try:
-        cam_idx = int(source)
-        return cv2.VideoCapture(cam_idx)
-    except ValueError:
-        # 이미지 파일이면 반복 재생
-        if os.path.splitext(source)[1].lower() in ['.jpg', '.png', '.jpeg']:
-            img = cv2.imread(source)
-            return img
-        return cv2.VideoCapture(source)
-
-# MediaPipe Pose 33개 본 이름 (Unreal 본 구조에 맞게 수정 가능)
 POSE_BONE_NAMES = [
     'nose', 'left_eye_inner', 'left_eye', 'left_eye_outer', 'right_eye_inner', 'right_eye', 'right_eye_outer',
     'left_ear', 'right_ear', 'mouth_left', 'mouth_right',
@@ -39,7 +27,6 @@ POSE_BONE_NAMES = [
     'left_foot_index', 'right_foot_index'
 ]
 
-# 부모 인덱스 (Unreal 본 계층에 맞게 수정 가능)
 POSE_BONE_PARENTS = [
     -1,  # nose
     0, 1, 2, 0, 4, 5,  # eyes
@@ -61,7 +48,6 @@ def get_bone_rotation(parent_pos, child_pos):
     rot = R.align_vectors([v_norm], [[1,0,0]])[0].as_quat()
     return rot.tolist()  # [x, y, z, w]
 
-# 스켈레톤 메시지 전송 함수
 def send_subject(sock, UDP_IP, UDP_PORT, log_file=None):
     subject_message = {
         "mycharacter4": [
@@ -77,9 +63,7 @@ def send_subject(sock, UDP_IP, UDP_PORT, log_file=None):
         with open(log_file, 'a') as f:
             f.write(msg.decode('utf-8') + '\n')
 
-# 프레임별 애니메이션 메시지 전송 함수
 def send_frame(sock, UDP_IP, UDP_PORT, frame_idx, landmarks, log_file=None):
-    # landmarks: mediapipe 33개 [[x, y, z, visibility], ...]
     bone_transforms = []
     for i, lm in enumerate(landmarks):
         loc = [lm[0], lm[1], lm[2]]
@@ -113,46 +97,42 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     log_file = args.log if args.log else None
+    hef_path = args.hef
+    cam_idx = args.camera
 
-    mp_pose = mp.solutions.pose
-    pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+    device = hailo.Device()
+    network_group = device.create_hef(hef_path)
+    input_vstream_info = network_group.get_input_vstream_infos()[0]
+    output_vstream_info = network_group.get_output_vstream_infos()[0]
 
-    cap = get_video_capture(args.source)
-    is_image = isinstance(cap, (np.ndarray,))
-    frame_idx = 0
-    subject_sent = False
-
-    while True:
-        if is_image:
-            frame = cap.copy()
-        else:
+    with hailo.vstream.InputVStreams(network_group, [input_vstream_info]) as input_vstreams, \
+         hailo.vstream.OutputVStreams(network_group, [output_vstream_info]) as output_vstreams:
+        cap = cv2.VideoCapture(cam_idx)
+        frame_idx = 0
+        subject_sent = False
+        while True:
             ret, frame = cap.read()
             if not ret:
                 break
-        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(image)
-
-        if results.pose_landmarks:
-            landmarks = results.pose_landmarks.landmark
-            landmark_list = []
-            for lm in landmarks:
-                landmark_list.append([lm.x, lm.y, lm.z, lm.visibility])
+            # 전처리: 네트워크 입력 크기에 맞게 resize, RGB 변환 등
+            input_frame = cv2.resize(frame, (input_vstream_info.shape[2], input_vstream_info.shape[1]))
+            input_frame = cv2.cvtColor(input_frame, cv2.COLOR_BGR2RGB)
+            input_frame = np.expand_dims(input_frame, axis=0)
+            # 추론
+            input_vstreams[0].send(input_frame)
+            output = output_vstreams[0].recv()
+            # output: (1, 33, 4) 등 mediapipe와 동일한 구조라고 가정
+            landmark_list = output[0].tolist()  # [[x, y, z, visibility], ...]
             if not subject_sent:
                 send_subject(sock, UDP_IP, UDP_PORT, log_file)
                 subject_sent = True
             send_frame(sock, UDP_IP, UDP_PORT, frame_idx, landmark_list, log_file)
-            mp.solutions.drawing_utils.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-        cv2.imshow('MediaPipe Pose', frame)
-        frame_idx += 1
-        key = cv2.waitKey(1)
-        if key == 27:
-            break
-        if is_image:
-            # 이미지 파일이면 한 번만 처리
-            break
-    if not is_image:
+            frame_idx += 1
+            cv2.imshow('Hailo Pose', frame)
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
         cap.release()
-    cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
 
 if __name__ == '__main__':
     main() 

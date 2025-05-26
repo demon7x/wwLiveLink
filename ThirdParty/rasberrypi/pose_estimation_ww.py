@@ -17,6 +17,8 @@ from hailo_rpi_common import (
     GStreamerApp,
     app_callback_class,
 )
+import socket
+import json
 
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
@@ -32,6 +34,7 @@ class user_app_callback_class(app_callback_class):
 
 # This is the callback function that will be called when data is available from the pipeline
 def app_callback(pad, info, user_data):
+    global skeleton_sent
     # Get the GstBuffer from the probe info
     buffer = info.get_buffer()
     # Check if the buffer is valid
@@ -80,7 +83,40 @@ def app_callback(pad, info, user_data):
                     cv2.circle(frame, (left_eye_x, left_eye_y), 5, (0, 255, 0), -1)
                     cv2.circle(frame, (right_eye_x, right_eye_y), 5, (0, 255, 0), -1)
                     # Note: using imshow will not work here, as the callback function is not running in the main thread   
-    
+            
+            # 스켈레톤 메시지 최초 1회 전송
+            if not skeleton_sent:
+                send_skeleton_structure()
+                skeleton_sent = True
+            # COCO → UE 본 매핑 (예시)
+            # 실제 매핑 순서와 개수는 스켈레톤 구조와 맞춰야 함
+            # points: [nose, left_eye, right_eye, ...] (COCO 순서)
+            # 아래는 예시 매핑 (실제 본 구조에 맞게 수정 필요)
+            bone_transforms = [
+                {"Location": [0, 0, 0], "Rotation": [0, 0, 0, 1], "Scale": [1, 1, 1]},  # root
+                {"Location": [points[11].x(), points[11].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # pelvis (left_hip)
+                {"Location": [points[5].x(), points[5].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # spine_01 (left_shoulder)
+                {"Location": [points[6].x(), points[6].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # spine_02 (right_shoulder)
+                {"Location": [points[0].x(), points[0].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # spine_03 (nose)
+                {"Location": [points[1].x(), points[1].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # neck_01 (left_eye)
+                {"Location": [points[2].x(), points[2].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # head (right_eye)
+                {"Location": [points[3].x(), points[3].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # clavicle_l (left_ear)
+                {"Location": [points[4].x(), points[4].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # upperarm_l (right_ear)
+                {"Location": [points[7].x(), points[7].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # lowerarm_l (left_elbow)
+                {"Location": [points[9].x(), points[9].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # hand_l (left_wrist)
+                {"Location": [points[8].x(), points[8].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]},  # clavicle_r (right_elbow)
+                {"Location": [points[10].x(), points[10].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # upperarm_r (right_wrist)
+                {"Location": [points[12].x(), points[12].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # lowerarm_r (right_hip)
+                {"Location": [points[13].x(), points[13].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # hand_r (left_knee)
+                {"Location": [points[14].x(), points[14].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_l (right_knee)
+                {"Location": [points[15].x(), points[15].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_l (left_ankle)
+                {"Location": [points[16].x(), points[16].y(), 0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_l (right_ankle)
+                {"Location": [0,0,0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # thigh_r (예시, 실제 매핑 필요)
+                {"Location": [0,0,0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # calf_r (예시)
+                {"Location": [0,0,0], "Rotation": [0,0,0,1], "Scale": [1,1,1]}, # foot_r (예시)
+            ]
+            send_frame_animation(bone_transforms)
+
     if user_data.use_frame:
         # Convert the frame to BGR
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
@@ -193,3 +229,52 @@ if __name__ == "__main__":
     args = parser.parse_args()
     app = GStreamerPoseEstimationApp(args, user_data)
     app.run()
+
+# UDP 설정 (필요시 수정)
+UDP_IP = "192.168.0.255"  # 브로드캐스트 주소
+UDP_PORT = 54321
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+skeleton_sent = False  # 스켈레톤 메시지 전송 여부 플래그
+
+# 스켈레톤 구조 메시지 전송 함수
+def send_skeleton_structure():
+    skeleton_message = {
+        "mycharacter2": [
+            {"Type": "CharacterSubject"},
+            {"Name": "root", "Parent": "-1"},
+            {"Name": "pelvis", "Parent": "0"},
+            {"Name": "spine_01", "Parent": "1"},
+            {"Name": "spine_02", "Parent": "2"},
+            {"Name": "spine_03", "Parent": "3"},
+            {"Name": "neck_01", "Parent": "4"},
+            {"Name": "head", "Parent": "5"},
+            {"Name": "clavicle_l", "Parent": "4"},
+            {"Name": "upperarm_l", "Parent": "8"},
+            {"Name": "lowerarm_l", "Parent": "9"},
+            {"Name": "hand_l", "Parent": "10"},
+            {"Name": "clavicle_r", "Parent": "4"},
+            {"Name": "upperarm_r", "Parent": "12"},
+            {"Name": "lowerarm_r", "Parent": "13"},
+            {"Name": "hand_r", "Parent": "14"},
+            {"Name": "thigh_l", "Parent": "1"},
+            {"Name": "calf_l", "Parent": "16"},
+            {"Name": "foot_l", "Parent": "17"},
+            {"Name": "thigh_r", "Parent": "1"},
+            {"Name": "calf_r", "Parent": "19"},
+            {"Name": "foot_r", "Parent": "20"},
+        ]
+    }
+    msg = json.dumps(skeleton_message).encode('utf-8')
+    sock.sendto(msg, (UDP_IP, UDP_PORT))
+
+# 프레임별 애니메이션 메시지 전송 함수
+def send_frame_animation(bone_transforms):
+    message = {
+        "mycharacter2": [
+            {"Type": "CharacterAnimation"},
+            *bone_transforms
+        ]
+    }
+    msg = json.dumps(message).encode('utf-8')
+    sock.sendto(msg, (UDP_IP, UDP_PORT))

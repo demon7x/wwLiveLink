@@ -248,6 +248,16 @@ def app_callback(pad, info, user_data):
     roi = hailo.get_roi_from_buffer(buffer)
     detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
     
+    # 프레임 카운트를 이용해 회전값 계산
+    frame_count = user_data.get_count()
+    rotation_angle = (frame_count * 30) % 360  # 30도씩 증가, 360도에서 리셋
+    rotation_rad = np.radians(rotation_angle)
+    
+    # 쿼터니언 계산 (z축 회전)
+    qz = np.sin(rotation_rad / 2)
+    qw = np.cos(rotation_rad / 2)
+    lowerarm_l_rotation = [0.0, 0.0, qz, qw]  # x, y, z, w 순서
+    
     # 본 매핑 정의 (COCO 17개 키포인트 기준)
     bone_map = {
         'head': ('nose', 'neck'),                 # nose -> neck
@@ -304,6 +314,10 @@ def app_callback(pad, info, user_data):
                     bone_map,
                     scale_axis='length'
                 )
+                
+                # lowerarm_l의 회전값 업데이트
+                if 'lowerarm_l' in bone_transforms:
+                    bone_transforms['lowerarm_l']['Rotation'] = lowerarm_l_rotation
                 
                 # 트랜스폼 리스트로 변환
                 transform_list = []

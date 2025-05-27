@@ -409,7 +409,7 @@ def app_callback(pad, info, user_data):
                 bone_transforms = []
                 for i in range(13):  # 13개의 본
                     bone_transforms.append({
-                        "Location": bone_positions[i].tolist(),
+                        "Location": bone_positions[i],  # 이미 리스트 형태이므로 tolist() 제거
                         "Rotation": bone_rotations[i],
                         "Scale": [1,1,1]
                     })

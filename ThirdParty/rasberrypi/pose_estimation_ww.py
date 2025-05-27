@@ -111,8 +111,18 @@ def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0], is_thigh
         
         # 벡터를 언리얼 엔진의 좌표계로 변환
         v_norm = np.array([v_norm[0], v_norm[1], -v_norm[2]])
+        
+        # 90도 회전 보정을 위한 추가 쿼터니언
+        correction_angle = np.pi / 2  # 90도
+        correction_quat = [
+            np.sin(correction_angle/2),  # x
+            0,                           # y
+            0,                           # z
+            np.cos(correction_angle/2)   # w
+        ]
     else:
         target = np.array(target_axis)
+        correction_quat = [0, 0, 0, 1]  # 보정 없음
     
     # 두 벡터 사이의 회전축과 각도 계산
     axis = np.cross(v_norm, target)
@@ -130,11 +140,21 @@ def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0], is_thigh
     sin_half = np.sin(half_angle)
     cos_half = np.cos(half_angle)
     
-    # thigh의 경우 회전 방향 보정
+    # 기본 회전 쿼터니언
+    base_quat = [axis[0] * sin_half, axis[1] * sin_half, axis[2] * sin_half, cos_half]
+    
     if is_thigh:
-        return [-axis[0] * sin_half, -axis[1] * sin_half, axis[2] * sin_half, cos_half]
+        # 쿼터니언 곱셈으로 90도 보정 적용
+        q1 = base_quat
+        q2 = correction_quat
+        return [
+            q1[3]*q2[0] + q1[0]*q2[3] + q1[1]*q2[2] - q1[2]*q2[1],  # x
+            q1[3]*q2[1] - q1[0]*q2[2] + q1[1]*q2[3] + q1[2]*q2[0],  # y
+            q1[3]*q2[2] + q1[0]*q2[1] - q1[1]*q2[0] + q1[2]*q2[3],  # z
+            q1[3]*q2[3] - q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2]   # w
+        ]
     else:
-        return [axis[0] * sin_half, axis[1] * sin_half, axis[2] * sin_half, cos_half]
+        return base_quat
 
 def detect_floor_angle(points_2d: np.ndarray) -> float:
     """

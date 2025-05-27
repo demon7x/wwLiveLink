@@ -315,7 +315,7 @@ def app_callback(pad, info, user_data):
                         print(transform)
                         transform_list.append({
                             "Location": transform['Location'],
-                            "Rotation": transform['Rotation'].append(1.0),
+                            "Rotation": [transform['Rotation'][0], transform['Rotation'][1], transform['Rotation'][2], 1.0],
                             "Scale": transform['Scale']
                         })
                 

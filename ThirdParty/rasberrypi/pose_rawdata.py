@@ -168,21 +168,21 @@ def app_callback(pad, info, user_data):
     roi = hailo.get_roi_from_buffer(buffer)
     detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
     
-    # 본 매핑 정의
+    # 본 매핑 정의 (COCO 17개 키포인트 기준)
     bone_map = {
         'head': ('point_0', 'point_1'),           # nose -> neck
         'upperarm_l': ('point_5', 'point_7'),     # left_shoulder -> left_elbow
         'upperarm_r': ('point_6', 'point_8'),     # right_shoulder -> right_elbow
         'lowerarm_l': ('point_7', 'point_9'),     # left_elbow -> left_wrist
         'lowerarm_r': ('point_8', 'point_10'),    # right_elbow -> right_wrist
-        'hand_l': ('point_9', 'point_11'),        # left_wrist -> left_pinky
-        'hand_r': ('point_10', 'point_12'),       # right_wrist -> right_pinky
+        'hand_l': ('point_9', 'point_9'),         # left_wrist (끝점)
+        'hand_r': ('point_10', 'point_10'),       # right_wrist (끝점)
         'thigh_l': ('point_11', 'point_13'),      # left_hip -> left_knee
         'thigh_r': ('point_12', 'point_14'),      # right_hip -> right_knee
         'calf_l': ('point_13', 'point_15'),       # left_knee -> left_ankle
         'calf_r': ('point_14', 'point_16'),       # right_knee -> right_ankle
-        'foot_l': ('point_15', 'point_17'),       # left_ankle -> left_heel
-        'foot_r': ('point_16', 'point_18'),       # right_ankle -> right_heel
+        'foot_l': ('point_15', 'point_15'),       # left_ankle (끝점)
+        'foot_r': ('point_16', 'point_16'),       # right_ankle (끝점)
     }
     
     for detection in detections:

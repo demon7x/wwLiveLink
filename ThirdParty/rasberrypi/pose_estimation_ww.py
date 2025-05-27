@@ -92,9 +92,10 @@ def map_2d_to_3d(
     
     return np.stack((x_world, y_world, z_world), axis=1)
 
-def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
+def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0], is_thigh=False):
     """
     부모-자식 본 사이의 회전을 쿼터니언으로 계산합니다.
+    is_thigh: thigh 본인 경우 특별한 회전 처리
     """
     v = np.array(child_pos) - np.array(parent_pos)
     norm = np.linalg.norm(v)
@@ -103,6 +104,12 @@ def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
     
     v_norm = v / norm
     target = np.array(target_axis)
+    
+    if is_thigh:
+        # thigh의 경우 언리얼 엔진의 좌표계에 맞게 회전 조정
+        # Y축이 전방, Z축이 상방인 왼손 좌표계 고려
+        v_norm = np.array([v_norm[0], -v_norm[1], -v_norm[2]])
+        target = np.array([target[0], -target[1], -target[2]])
     
     # 두 벡터 사이의 회전축과 각도 계산
     axis = np.cross(v_norm, target)
@@ -197,7 +204,9 @@ def get_bone_rotations(points_3d):
             parent_idx = keypoint_indices[parent_name]
             child_idx = keypoint_indices[bone_name]
             if parent_idx < len(points_3d) and child_idx < len(points_3d):
-                rot = calculate_bone_rotation(points_3d[parent_idx], points_3d[child_idx])
+                # thigh 본인 경우 특별한 회전 처리
+                is_thigh = bone_name in ['thigh_l', 'thigh_r']
+                rot = calculate_bone_rotation(points_3d[parent_idx], points_3d[child_idx], is_thigh=is_thigh)
                 rotations.append(rot)
             else:
                 rotations.append([0,0,0,1])

@@ -49,11 +49,11 @@ def map_2d_to_3d(
     pts = keypoints_2d - np.array(origin_px)
     
     # 스케일 적용 및 좌표계 변환
-    x_world = pts[:, 0] * scale  # COCO x -> Unreal x
-    y_world = pts[:, 1] * scale  # COCO y -> Unreal z (높이)
-    z_world = np.zeros_like(x_world)  # COCO z -> Unreal y (전방)
+    x_world = pts[:, 0] * 0.0178  # COCO x -> Unreal x (스케일 조정)
+    y_world = np.zeros_like(x_world)  # COCO y -> Unreal y (전방)
+    z_world = np.zeros_like(x_world)  # COCO z -> Unreal z (높이)
     
-    return np.stack((x_world, z_world, y_world), axis=1)
+    return np.stack((x_world, y_world, z_world), axis=1)
 
 def quaternion_from_vectors(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
     """
@@ -243,7 +243,7 @@ def app_callback(pad, info, user_data):
                     skeleton_sent = True
                 
                 # 3D 변환
-                scale = 0.01  # 1cm 단위로 변환
+                scale = 0.0178  # 스프레드시트 예시와 동일한 스케일
                 floor_angle = 0.0  # 바닥 각도
                 origin_px = (width/2, height/2)  # 이미지 중심을 원점으로
                 

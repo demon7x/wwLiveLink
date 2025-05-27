@@ -19,7 +19,6 @@ from hailo_rpi_common import (
 )
 import socket
 import json
-from scipy.spatial.transform import Rotation as R
 
 # UDP 설정 (필요시 수정)
 UDP_IP = "192.168.0.255"  # 브로드캐스트 주소
@@ -33,6 +32,77 @@ LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pose_udp_lo
 def log_udp_message(msg):
     with open(LOG_FILE, 'a') as f:
         f.write(msg.decode('utf-8') + '\n')
+
+def map_2d_to_3d(
+    keypoints_2d: np.ndarray,
+    scale: float,
+    floor_angle_deg: float,
+    origin_px: tuple = (0, 0),
+    depth: float = 0.0
+) -> np.ndarray:
+    theta = np.deg2rad(floor_angle_deg)
+    c, s = np.cos(theta), np.sin(theta)
+    pts = keypoints_2d - np.array(origin_px)
+    x_plane = pts[:, 0] * c + pts[:, 1] * s
+    y_plane = -pts[:, 0] * s + pts[:, 1] * c
+    x_world = x_plane * scale
+    y_world = y_plane * scale
+    z_world = np.full_like(x_world, depth)
+    return np.stack((x_world, y_world, z_world), axis=1)
+
+def quaternion_from_vectors(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
+    v0 = v0 / np.linalg.norm(v0)
+    v1 = v1 / np.linalg.norm(v1)
+    dot = np.dot(v0, v1)
+    if dot < -0.999999:
+        orth = np.array([1, 0, 0]) if abs(v0[0]) < 0.9 else np.array([0, 1, 0])
+        axis = np.cross(v0, orth)
+        axis /= np.linalg.norm(axis)
+        return np.array([axis[0], axis[1], axis[2], 0.0])
+    axis = np.cross(v0, v1)
+    s = np.sqrt((1.0 + dot) * 2.0)
+    q_xyz = axis / s
+    q_w = 0.5 * s
+    q = np.concatenate([q_xyz, [q_w]])
+    return q / np.linalg.norm(q)
+
+def quaternion_to_euler(q: np.ndarray) -> tuple:
+    x, y, z, w = q
+    sinr = 2 * (w*x + y*z)
+    cosr = 1 - 2*(x*x + y*y)
+    roll = np.arctan2(sinr, cosr)
+    sinp = 2 * (w*y - z*x)
+    pitch = np.arcsin(np.clip(sinp, -1.0, 1.0))
+    siny = 2 * (w*z + x*y)
+    cosy = 1 - 2*(y*y + z*z)
+    yaw = np.arctan2(siny, cosy)
+    return (np.rad2deg(pitch), np.rad2deg(yaw), np.rad2deg(roll))
+
+def compute_bone_transforms_euler(
+    keypoints_3d: dict,
+    bone_map: dict,
+    default_axis: np.ndarray = np.array([1.0, 0.0, 0.0]),
+    scale_axis: str = 'identity'
+) -> dict:
+    transforms = {}
+    for bone, (parent, child) in bone_map.items():
+        p = np.array(keypoints_3d[parent], dtype=float)
+        c = np.array(keypoints_3d[child], dtype=float)
+        loc = ((p + c) / 2.0).tolist()
+        dir_vec = c - p
+        length = np.linalg.norm(dir_vec)
+        if length < 1e-6:
+            dir_vec = default_axis
+            length = 0.0
+        q = quaternion_from_vectors(default_axis, dir_vec)
+        pitch, yaw, roll = quaternion_to_euler(q)
+        scale = [length, 1.0, 1.0] if scale_axis == 'length' else [1.0, 1.0, 1.0]
+        transforms[bone] = {
+            'Location': loc,
+            'Rotation': {'Pitch': pitch, 'Yaw': yaw, 'Roll': roll},
+            'Scale': scale
+        }
+    return transforms
 
 # 스켈레톤 구조 메시지 전송 함수
 def send_skeleton_structure():
@@ -70,160 +140,6 @@ def send_frame_animation(bone_transforms):
     sock.sendto(msg, (UDP_IP, UDP_PORT))
     log_udp_message(msg)
 
-def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
-    """
-    부모-자식 본 사이의 회전을 계산합니다.
-    target_axis: 본이 가리키는 방향 (기본값: x축)
-    """
-    v = np.array(child_pos) - np.array(parent_pos)
-    norm = np.linalg.norm(v)
-    if norm < 1e-6:
-        return [0,0,0,1]
-    v_norm = v / norm
-    rot = R.align_vectors([v_norm], [target_axis])[0].as_quat()
-    return rot.tolist()  # [x, y, z, w]
-
-def map_2d_to_3d(
-    keypoints_2d: np.ndarray,
-    scale: float,
-    floor_angle_deg: float,
-    origin_px: tuple = (0, 0),
-    depth: float = 0.0,
-    to_unreal: bool = False,
-    unreal_scale: float = 100.0
-) -> np.ndarray:
-    """
-    2D COCO 키포인트(pixel) 배열을 3D 평면 좌표로 매핑합니다.
-    """
-    theta = np.deg2rad(floor_angle_deg)
-    c, s = np.cos(theta), np.sin(theta)
-    pts = keypoints_2d - np.array(origin_px)
-    x_plane = pts[:, 0] * c + pts[:, 1] * s
-    y_plane = -pts[:, 0] * s + pts[:, 1] * c
-    x_world = x_plane * scale
-    y_world = y_plane * scale
-    z_world = np.full_like(x_world, depth)
-    points3d = np.stack((x_world, y_world, z_world), axis=1)
-    if to_unreal:
-        points3d *= unreal_scale
-    return points3d
-
-def detect_floor_angle(points_2d: np.ndarray) -> float:
-    """
-    바닥 각도를 자동으로 감지합니다.
-    """
-    left_hip = points_2d[11]
-    right_hip = points_2d[12]
-    left_ankle = points_2d[15]
-    right_ankle = points_2d[16]
-    hip_mid = (left_hip + right_hip) / 2
-    ankle_mid = (left_ankle + right_ankle) / 2
-    dx = ankle_mid[0] - hip_mid[0]
-    dy = ankle_mid[1] - hip_mid[1]
-    angle_rad = np.arctan2(dy, dx)
-    return np.rad2deg(angle_rad)
-
-def calculate_scale(points_2d: np.ndarray, real_height_m: float = 1.7) -> float:
-    """
-    실제 키를 기반으로 픽셀-미터 스케일을 계산합니다.
-    """
-    head = points_2d[0]
-    left_ankle = points_2d[15]
-    right_ankle = points_2d[16]
-    ankle_mid = (left_ankle + right_ankle) / 2
-    pixel_height = np.linalg.norm(head - ankle_mid)
-    return real_height_m / pixel_height
-
-def get_bone_rotations(points_3d):
-    """
-    스켈레톤 구조에 맞는 13개의 본 회전을 계산합니다.
-    """
-    rotations = []
-    # 스켈레톤 구조에 맞는 본 매핑 (COCO 키포인트 -> 스켈레톤 본)
-    bone_mapping = {
-        'head': 0,           # nose
-        'upperarm_l': 11,    # left_shoulder
-        'upperarm_r': 12,    # right_shoulder
-        'lowerarm_l': 13,    # left_elbow
-        'lowerarm_r': 14,    # right_elbow
-        'hand_l': 15,        # left_wrist
-        'hand_r': 16,        # right_wrist
-        'thigh_l': 23,       # left_hip
-        'thigh_r': 24,       # right_hip
-        'calf_l': 25,        # left_knee
-        'calf_r': 26,        # right_knee
-        'foot_l': 27,        # left_ankle
-        'foot_r': 28,        # right_ankle
-    }
-    
-    # 본 계층 구조 정의
-    bone_hierarchy = [
-        ('head', None),          # head는 부모 없음
-        ('upperarm_l', 'head'),  # upperarm_l의 부모는 head
-        ('upperarm_r', 'head'),  # upperarm_r의 부모는 head
-        ('lowerarm_l', 'upperarm_l'),
-        ('lowerarm_r', 'upperarm_r'),
-        ('hand_l', 'lowerarm_l'),
-        ('hand_r', 'lowerarm_r'),
-        ('thigh_l', 'head'),
-        ('thigh_r', 'head'),
-        ('calf_l', 'thigh_l'),
-        ('calf_r', 'thigh_r'),
-        ('foot_l', 'calf_l'),
-        ('foot_r', 'calf_r'),
-    ]
-    
-    # 각 본의 회전 계산
-    for bone_name, parent_name in bone_hierarchy:
-        if parent_name is None:
-            # head는 기본 회전
-            rotations.append([0,0,0,1])
-        else:
-            # 부모-자식 본 사이의 회전 계산
-            parent_idx = bone_mapping[parent_name]
-            child_idx = bone_mapping[bone_name]
-            if parent_idx < len(points_3d) and child_idx < len(points_3d):
-                rot = calculate_bone_rotation(points_3d[parent_idx], points_3d[child_idx])
-                rotations.append(rot)
-            else:
-                rotations.append([0,0,0,1])
-    
-    return rotations
-
-def get_bone_positions(points_3d):
-    """
-    스켈레톤 구조에 맞는 13개의 본 위치를 계산합니다.
-    """
-    positions = []
-    # 스켈레톤 구조에 맞는 본 매핑
-    bone_mapping = {
-        'head': 0,           # nose
-        'upperarm_l': 11,    # left_shoulder
-        'upperarm_r': 12,    # right_shoulder
-        'lowerarm_l': 13,    # left_elbow
-        'lowerarm_r': 14,    # right_elbow
-        'hand_l': 15,        # left_wrist
-        'hand_r': 16,        # right_wrist
-        'thigh_l': 23,       # left_hip
-        'thigh_r': 24,       # right_hip
-        'calf_l': 25,        # left_knee
-        'calf_r': 26,        # right_knee
-        'foot_l': 27,        # left_ankle
-        'foot_r': 28,        # right_ankle
-    }
-    
-    # 각 본의 위치 추출
-    for bone_name in ['head', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r',
-                     'hand_l', 'hand_r', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r',
-                     'foot_l', 'foot_r']:
-        idx = bone_mapping[bone_name]
-        if idx < len(points_3d):
-            positions.append(points_3d[idx].tolist())
-        else:
-            positions.append([0,0,0])
-    
-    return positions
-
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
 # -----------------------------------------------------------------------------------------------
@@ -252,6 +168,23 @@ def app_callback(pad, info, user_data):
     roi = hailo.get_roi_from_buffer(buffer)
     detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
     
+    # 본 매핑 정의
+    bone_map = {
+        'head': ('nose', 'neck'),
+        'upperarm_l': ('left_shoulder', 'left_elbow'),
+        'upperarm_r': ('right_shoulder', 'right_elbow'),
+        'lowerarm_l': ('left_elbow', 'left_wrist'),
+        'lowerarm_r': ('right_elbow', 'right_wrist'),
+        'hand_l': ('left_wrist', 'left_pinky'),
+        'hand_r': ('right_wrist', 'right_pinky'),
+        'thigh_l': ('left_hip', 'left_knee'),
+        'thigh_r': ('right_hip', 'right_knee'),
+        'calf_l': ('left_knee', 'left_ankle'),
+        'calf_r': ('right_knee', 'right_ankle'),
+        'foot_l': ('left_ankle', 'left_heel'),
+        'foot_r': ('right_ankle', 'right_heel'),
+    }
+    
     for detection in detections:
         label = detection.get_label()
         bbox = detection.get_bbox()
@@ -269,16 +202,38 @@ def app_callback(pad, info, user_data):
                     send_skeleton_structure()
                     skeleton_sent = True
                 
-                # 본 트랜스폼 생성 (원본 포인트 그대로 사용)
-                bone_transforms = []
-                for point in points_2d:
-                    bone_transforms.append({
-                        "Location": [point[0], point[1], 0.0],  # Z는 0으로 설정
-                        "Rotation": [0, 0, 0, 1],  # 기본 회전
-                        "Scale": [1, 1, 1]
-                    })
+                # 3D 변환
+                scale = 0.01  # 1cm 단위로 변환
+                floor_angle = 0.0  # 바닥 각도
+                origin_px = (width/2, height/2)  # 이미지 중심을 원점으로
                 
-                send_frame_animation(bone_transforms)
+                # 3D 좌표로 변환
+                points_3d = map_2d_to_3d(points_2d, scale, floor_angle, origin_px)
+                
+                # 본 트랜스폼 계산
+                bone_transforms = compute_bone_transforms_euler(
+                    {f"point_{i}": point for i, point in enumerate(points_3d)},
+                    bone_map,
+                    scale_axis='length'
+                )
+                
+                # 트랜스폼 리스트로 변환
+                transform_list = []
+                for bone in ['head', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r',
+                           'hand_l', 'hand_r', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r',
+                           'foot_l', 'foot_r']:
+                    if bone in bone_transforms:
+                        transform = bone_transforms[bone]
+                        transform_list.append({
+                            "Location": transform['Location'],
+                            "Rotation": [transform['Rotation']['Pitch'], 
+                                       transform['Rotation']['Yaw'], 
+                                       transform['Rotation']['Roll'], 
+                                       1.0],
+                            "Scale": transform['Scale']
+                        })
+                
+                send_frame_animation(transform_list)
                 
                 if user_data.use_frame:    
                     for point_2d in points_2d:
@@ -322,8 +277,9 @@ class GStreamerPoseEstimationApp(GStreamerApp):
         else:  
             source_element = f"filesrc location={self.video_source} name=src_0 ! "
             source_element += QUEUE("queue_dec264")
-            source_element += f" qtdemux ! h264parse ! avdec_h264 max-threads=2 ! "
-            source_element += f" video/x-raw,format=I420 ! "
+            source_element += f"decodebin ! videoconvert ! "
+            source_element += f"video/x-raw,format=RGB ! "
+        
         source_element += QUEUE("queue_scale")
         source_element += f"videoscale n-threads=2 ! "
         source_element += QUEUE("queue_src_convert")

@@ -314,7 +314,7 @@ def app_callback(pad, info, user_data):
                         transform = bone_transforms[bone]
                         transform_list.append({
                             "Location": transform['Location'],
-                            "Rotation": transform['Rotation']+1.0
+                            "Rotation": transform['Rotation'].append(1.0),
                             "Scale": transform['Scale']
                         })
                 

@@ -194,18 +194,18 @@ def send_skeleton_structure():
         "mycharacter3": [
             {"Type": "CharacterSubject"},
             {"Name": "head", "Parent": "-1"},
-            {"Name": "upperarm_l", "Parent": "1"},
             {"Name": "upperarm_r", "Parent": "1"},
-            {"Name": "lowerarm_l", "Parent": "2"},
-            {"Name": "lowerarm_r", "Parent": "3"},
-            {"Name": "hand_l", "Parent": "4"},
-            {"Name": "hand_r", "Parent": "5"},
-            {"Name": "thigh_l", "Parent": "1"},
+            {"Name": "upperarm_l", "Parent": "1"},
+            {"Name": "lowerarm_r", "Parent": "2"},
+            {"Name": "lowerarm_l", "Parent": "3"},
+            {"Name": "hand_r", "Parent": "4"},
+            {"Name": "hand_l", "Parent": "5"},
             {"Name": "thigh_r", "Parent": "1"},
-            {"Name": "calf_l", "Parent": "8"},
-            {"Name": "calf_r", "Parent": "9"},
-            {"Name": "foot_l", "Parent": "10"},
-            {"Name": "foot_r", "Parent": "11"},
+            {"Name": "thigh_l", "Parent": "1"},
+            {"Name": "calf_r", "Parent": "8"},
+            {"Name": "calf_l", "Parent": "9"},
+            {"Name": "foot_r", "Parent": "10"},
+            {"Name": "foot_l", "Parent": "11"},
         ]
     }
     msg = json.dumps(skeleton_message).encode('utf-8')

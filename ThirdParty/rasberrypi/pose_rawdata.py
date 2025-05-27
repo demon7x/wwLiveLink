@@ -106,52 +106,86 @@ def compute_bone_transforms_euler(
     default_axis: np.ndarray = np.array([0.0, 0.0, 1.0]),  # 언리얼 엔진의 기본 상방 벡터
     scale_axis: str = 'identity'
 ) -> dict:
+    transform_values = {
+        'head': {
+            'Location': [5.758485, 0.000000, 0.000000],
+            'Rotation': [0.000334, 0.000071, -12.291212],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'upperarm_l': {
+            'Location': [-15.285989, 0.000005, -0.000402],
+            'Rotation': [-3.269641, 5.224322, 0.091730],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'upperarm_r': {
+            'Location': [15.286094, 0.000000, 0.000000],
+            'Rotation': [-3.269812, 5.224317, 0.091740],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'lowerarm_l': {
+            'Location': [-27.089924, 0.000000, -0.000000],
+            'Rotation': [0.000000, -0.000000, 36.700416],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'lowerarm_r': {
+            'Location': [27.090353, -0.000000, -0.000000],
+            'Rotation': [-0.000000, 0.000000, 36.700416],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'hand_l': {
+            'Location': [-26.095495, 0.000000, 0.000000],
+            'Rotation': [-72.649020, -10.438207, -3.748059],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'hand_r': {
+            'Location': [26.095160, -0.000000, 0.000000],
+            'Rotation': [-72.649020, -10.438207, -3.748059],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'thigh_l': {
+            'Location': [-3.232044, 0.067992, 11.154600],
+            'Rotation': [8.475469, 2.390187, -175.202508],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'thigh_r': {
+            'Location': [-3.231992, 0.068032, -11.154586],
+            'Rotation': [8.475469, 2.390187, 4.797492],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'calf_l': {
+            'Location': [45.751938, 0.000000, -0.000000],
+            'Rotation': [-0.000000, -0.000000, 1.093458],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'calf_r': {
+            'Location': [-45.752037, -0.000000, 0.000000],
+            'Rotation': [-0.000000, -0.000000, 1.093458],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'foot_l': {
+            'Location': [41.705467, 0.000000, 0.000000],
+            'Rotation': [0.005113, -2.539827, -0.113795],
+            'Scale': [1.0, 1.0, 1.0]
+        },
+        'foot_r': {
+            'Location': [-41.705421, -0.000000, -0.000000],
+            'Rotation': [0.005113, -2.539827, -0.113795],
+            'Scale': [1.0, 1.0, 1.0]
+        }
+    }
+    
     transforms = {}
     for bone, (parent, child) in bone_map.items():
-        p = np.array(keypoints_3d[parent], dtype=float)
-        c = np.array(keypoints_3d[child], dtype=float)
-        
-        # 본의 위치는 부모와 자식의 중점
-        loc = ((p + c) / 2.0).tolist()
-        
-        # 본의 방향 벡터
-        dir_vec = c - p
-        length = np.linalg.norm(dir_vec)
-        
-        # 회전값 계산
-        # 1. 방향 벡터를 정규화
-        if length > 1e-6:
-            dir_vec = dir_vec / length
-        else:
-            dir_vec = default_axis
-        
-        # 2. 기본 축과의 각도 계산
-        dot = np.dot(default_axis, dir_vec)
-        cross = np.cross(default_axis, dir_vec)
-        
-        # 3. 오일러 각도 계산
-        if abs(dot) > 0.999999:
-            roll = 0.0
-            pitch = 0.0
-            yaw = 0.0
-        else:
-            # Roll (Z축 회전)
-            roll = np.arctan2(cross[2], dot) * 180.0 / np.pi
-            
-            # Pitch (X축 회전)
-            pitch = np.arcsin(np.clip(cross[1], -1.0, 1.0)) * 180.0 / np.pi
-            
-            # Yaw (Y축 회전)
-            yaw = -np.arctan2(cross[0], dot) * 180.0 / np.pi
-        
-        # 본의 스케일
-        scale = [1.0, 1.0, 1.0]  # 기본 스케일
-        
-        transforms[bone] = {
-            'Location': loc,
-            'Rotation': {'Roll': roll, 'Pitch': pitch, 'Yaw': yaw},
-            'Scale': scale
-        }
+        if bone in transform_values:
+            transforms[bone] = {
+                'Location': transform_values[bone]['Location'],
+                'Rotation': {
+                    'Roll': transform_values[bone]['Rotation'][0],
+                    'Pitch': transform_values[bone]['Rotation'][1],
+                    'Yaw': transform_values[bone]['Rotation'][2]
+                },
+                'Scale': transform_values[bone]['Scale']
+            }
     return transforms
 
 # 스켈레톤 구조 메시지 전송 함수

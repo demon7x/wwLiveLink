@@ -183,6 +183,120 @@ def two_bone_ik(start, mid, end):
     rot_elbow = R.align_vectors([lower_norm], [upper_norm])[0].as_quat().tolist()
     return rot_shoulder, rot_elbow
 
+def map_2d_to_3d(
+    keypoints_2d: np.ndarray,
+    scale: float,
+    floor_angle_deg: float,
+    origin_px: tuple = (0, 0),
+    depth: float = 0.0,
+    to_unreal: bool = False,
+    unreal_scale: float = 100.0
+) -> np.ndarray:
+    """
+    2D COCO 키포인트(pixel) 배열을 3D 평면 좌표로 매핑합니다.
+    """
+    theta = np.deg2rad(floor_angle_deg)
+    c, s = np.cos(theta), np.sin(theta)
+    pts = keypoints_2d - np.array(origin_px)
+    x_plane = pts[:, 0] * c + pts[:, 1] * s
+    y_plane = -pts[:, 0] * s + pts[:, 1] * c
+    x_world = x_plane * scale
+    y_world = y_plane * scale
+    z_world = np.full_like(x_world, depth)
+    points3d = np.stack((x_world, y_world, z_world), axis=1)
+    if to_unreal:
+        points3d *= unreal_scale
+    return points3d
+
+def detect_floor_angle(points_2d: np.ndarray) -> float:
+    """
+    바닥 각도를 자동으로 감지합니다.
+    """
+    left_hip = points_2d[11]
+    right_hip = points_2d[12]
+    left_ankle = points_2d[15]
+    right_ankle = points_2d[16]
+    hip_mid = (left_hip + right_hip) / 2
+    ankle_mid = (left_ankle + right_ankle) / 2
+    dx = ankle_mid[0] - hip_mid[0]
+    dy = ankle_mid[1] - hip_mid[1]
+    angle_rad = np.arctan2(dy, dx)
+    return np.rad2deg(angle_rad)
+
+def calculate_scale(points_2d: np.ndarray, real_height_m: float = 1.7) -> float:
+    """
+    실제 키를 기반으로 픽셀-미터 스케일을 계산합니다.
+    """
+    head = points_2d[0]
+    left_ankle = points_2d[15]
+    right_ankle = points_2d[16]
+    ankle_mid = (left_ankle + right_ankle) / 2
+    pixel_height = np.linalg.norm(head - ankle_mid)
+    return real_height_m / pixel_height
+
+def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
+    """
+    부모-자식 본 사이의 회전을 계산합니다.
+    target_axis: 본이 가리키는 방향 (기본값: x축)
+    """
+    v = np.array(child_pos) - np.array(parent_pos)
+    norm = np.linalg.norm(v)
+    if norm < 1e-6:
+        return [0,0,0,1]
+    v_norm = v / norm
+    rot = R.align_vectors([v_norm], [target_axis])[0].as_quat()
+    return rot.tolist()  # [x, y, z, w]
+
+def get_bone_rotations(points_3d):
+    """
+    모든 본의 회전을 계산합니다.
+    """
+    rotations = []
+    # COCO 키포인트 인덱스 매핑
+    bone_pairs = [
+        (0, 1),    # nose -> left_eye_inner
+        (1, 2),    # left_eye_inner -> left_eye
+        (2, 3),    # left_eye -> left_eye_outer
+        (0, 4),    # nose -> right_eye_inner
+        (4, 5),    # right_eye_inner -> right_eye
+        (5, 6),    # right_eye -> right_eye_outer
+        (0, 7),    # nose -> left_ear
+        (0, 8),    # nose -> right_ear
+        (0, 9),    # nose -> mouth_left
+        (0, 10),   # nose -> mouth_right
+        (0, 11),   # nose -> left_shoulder
+        (0, 12),   # nose -> right_shoulder
+        (11, 13),  # left_shoulder -> left_elbow
+        (12, 14),  # right_shoulder -> right_elbow
+        (13, 15),  # left_elbow -> left_wrist
+        (14, 16),  # right_elbow -> right_wrist
+        (15, 17),  # left_wrist -> left_pinky
+        (16, 18),  # right_wrist -> right_pinky
+        (15, 19),  # left_wrist -> left_index
+        (16, 20),  # right_wrist -> right_index
+        (15, 21),  # left_wrist -> left_thumb
+        (16, 22),  # right_wrist -> right_thumb
+        (0, 23),   # nose -> left_hip
+        (0, 24),   # nose -> right_hip
+        (23, 25),  # left_hip -> left_knee
+        (24, 26),  # right_hip -> right_knee
+        (25, 27),  # left_knee -> left_ankle
+        (26, 28),  # right_knee -> right_ankle
+        (27, 29),  # left_ankle -> left_heel
+        (28, 30),  # right_ankle -> right_heel
+        (29, 31),  # left_heel -> left_foot_index
+        (30, 32),  # right_heel -> right_foot_index
+    ]
+    
+    for parent_idx, child_idx in bone_pairs:
+        if parent_idx < len(points_3d) and child_idx < len(points_3d):
+            rot = calculate_bone_rotation(points_3d[parent_idx], points_3d[child_idx])
+            rotations.append(rot)
+        else:
+            rotations.append([0,0,0,1])
+    
+    return rotations
+
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
 # -----------------------------------------------------------------------------------------------
@@ -198,109 +312,76 @@ class user_app_callback_class(app_callback_class):
 # This is the callback function that will be called when data is available from the pipeline
 def app_callback(pad, info, user_data):
     global skeleton_sent
-    # Get the GstBuffer from the probe info
     buffer = info.get_buffer()
-    # Check if the buffer is valid
     if buffer is None:
         return Gst.PadProbeReturn.OK
         
-    # Using the user_data to count the number of frames
     user_data.increment()
     string_to_print = f"Frame count: {user_data.get_count()}\n"
     
-    # Get the caps from the pad
     format, width, height = get_caps_from_pad(pad)
 
-    # If the user_data.use_frame is set to True, we can get the video frame from the buffer
     frame = None
     if user_data.use_frame and format is not None and width is not None and height is not None:
-        # Get video frame
         frame = get_numpy_from_buffer(buffer, format, width, height)
 
-    # Get the detections from the buffer
     roi = hailo.get_roi_from_buffer(buffer)
     detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
     
-    # Parse the detections
     for detection in detections:
         label = detection.get_label()
         bbox = detection.get_bbox()
         confidence = detection.get_confidence()
         if label == "person":
             string_to_print += (f"Detection: {label} {confidence:.2f}\n")
-            # Pose estimation landmarks from detection (if available)
             landmarks = detection.get_objects_typed(hailo.HAILO_LANDMARKS)
             if len(landmarks) != 0:
                 points = landmarks[0].get_points()
-                left_eye = points[1]  # assuming 1 is the index for the left eye
-                right_eye = points[2]  # assuming 2 is the index for the right eye
-                # The landmarks are normalized to the bounding box, we also need to convert them to the frame size
-                left_eye_x = int((left_eye.x() * bbox.width() + bbox.xmin()) * width)
-                left_eye_y = int((left_eye.y() * bbox.height() + bbox.ymin()) * height)
-                right_eye_x = int((right_eye.x() * bbox.width() + bbox.xmin()) * width)
-                right_eye_y = int((right_eye.y() * bbox.height() + bbox.ymin()) * height)
-                string_to_print += (f" Left eye: x: {left_eye_x:.2f} y: {left_eye_y:.2f} Right eye: x: {right_eye_x:.2f} y: {right_eye_y:.2f}\n")
-                string_to_print += (f" origin_data: x: {left_eye} \n")
+                
+                # 2D 포인트 추출
+                points_2d = np.array([[p.x() * width, p.y() * height] for p in points])
+                
+                # 바닥 각도 감지
+                floor_angle = detect_floor_angle(points_2d)
+                
+                # 스케일 계산
+                scale = calculate_scale(points_2d)
+                
+                # 3D 좌표로 변환
+                points_3d = map_2d_to_3d(
+                    keypoints_2d=points_2d,
+                    scale=scale,
+                    floor_angle_deg=floor_angle,
+                    origin_px=(width/2, height/2),
+                    depth=0.0,
+                    to_unreal=True
+                )
+                
+                if not skeleton_sent:
+                    send_skeleton_structure()
+                    skeleton_sent = True
+                
+                # 본 회전 계산
+                bone_rotations = get_bone_rotations(points_3d)
+                
+                # 본 트랜스폼 생성
+                bone_transforms = []
+                for i, point_3d in enumerate(points_3d):
+                    bone_transforms.append({
+                        "Location": point_3d.tolist(),
+                        "Rotation": bone_rotations[i] if i < len(bone_rotations) else [0,0,0,1],
+                        "Scale": [1,1,1]
+                    })
+                
+                send_frame_animation(bone_transforms)
+                
                 if user_data.use_frame:    
-                    # Add markers to the frame to show eye landmarks
-                    cv2.circle(frame, (left_eye_x, left_eye_y), 5, (0, 255, 0), -1)
-                    cv2.circle(frame, (right_eye_x, right_eye_y), 5, (0, 255, 0), -1)
-                    # Note: using imshow will not work here, as the callback function is not running in the main thread   
-            
-            # 스켈레톤 메시지 최초 1회 전송
-            if not skeleton_sent:
-                send_skeleton_structure()
-                skeleton_sent = True
-            # points에서 x, y만 추출하여 변환 함수 적용
-            raw_points = [
-                [points[0].x(), points[0].y(), 0],   # head (nose)
-                [points[5].x(), points[5].y(), 0],   # upperarm_l (left_shoulder)
-                [points[6].x(), points[6].y(), 0],   # upperarm_r (right_shoulder)
-                [points[7].x(), points[7].y(), 0],   # lowerarm_l (left_elbow)
-                [points[8].x(), points[8].y(), 0],   # lowerarm_r (right_elbow)
-                [points[9].x(), points[9].y(), 0],   # hand_l (left_wrist)
-                [points[10].x(), points[10].y(), 0], # hand_r (right_wrist)
-                [points[11].x(), points[11].y(), 0], # thigh_l (left_hip)
-                [points[12].x(), points[12].y(), 0], # thigh_r (right_hip)
-                [points[13].x(), points[13].y(), 0], # calf_l (left_knee)
-                [points[14].x(), points[14].y(), 0], # calf_r (right_knee)
-                [points[15].x(), points[15].y(), 0], # foot_l (left_ankle)
-                [points[16].x(), points[16].y(), 0], # foot_r (right_ankle)
-            ]
-            bone_world_positions = normalize_and_scale(raw_points, key_height_cm=160)
-            # IK 적용: 왼팔(upperarm_l, lowerarm_l, hand_l)
-            rot_upperarm_l, rot_lowerarm_l = two_bone_ik(
-                bone_world_positions[1], bone_world_positions[3], bone_world_positions[5]
-            )
-            # IK 적용: 오른팔(upperarm_r, lowerarm_r, hand_r)
-            rot_upperarm_r, rot_lowerarm_r = two_bone_ik(
-                bone_world_positions[2], bone_world_positions[4], bone_world_positions[6]
-            )
-            # 나머지 본은 회전 [0,0,0,1]
-            bone_rotations = [
-                [0,0,0,1],         # head
-                rot_upperarm_l,    # upperarm_l
-                rot_upperarm_r,    # upperarm_r
-                rot_lowerarm_l,    # lowerarm_l
-                rot_lowerarm_r,    # lowerarm_r
-                [0,0,0,1],        # hand_l
-                [0,0,0,1],        # hand_r
-                [0,0,0,1],        # thigh_l
-                [0,0,0,1],        # thigh_r
-                [0,0,0,1],        # calf_l
-                [0,0,0,1],        # calf_r
-                [0,0,0,1],        # foot_l
-                [0,0,0,1],        # foot_r
-            ]
-            bone_local_positions = world_to_local_positions(bone_world_positions, PARENT_INDICES)
-            bone_transforms = [
-                {"Location": bone_local_positions[i], "Rotation": bone_rotations[i], "Scale": [1,1,1]}
-                for i in range(len(bone_local_positions))
-            ]
-            send_frame_animation(bone_transforms)
+                    for point_2d in points_2d:
+                        cv2.circle(frame, (int(point_2d[0]), int(point_2d[1])), 5, (0, 255, 0), -1)
+                    cv2.putText(frame, f"Floor Angle: {floor_angle:.1f}°", (10, 30), 
+                              cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     if user_data.use_frame:
-        # Convert the frame to BGR
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         user_data.set_frame(frame)
 
@@ -351,8 +432,8 @@ class GStreamerPoseEstimationApp(GStreamerApp):
         self.network_format = "RGB"
         self.default_postprocess_so = os.path.join(self.postprocess_dir, 'libyolov8pose_post.so')
         self.post_function_name = "filter"
-        #self.hef_path = os.path.join(self.current_path, '../../Resources/hailo8l/pose_landmark_full.hef')
-        self.hef_path = os.path.join(self.current_path, 'yolov8s_pose_h8l_pi.hef')
+        self.hef_path = os.path.join(self.current_path, '../../Resources/hailo8l/pose_landmark_full.hef')
+        #self.hef_path = os.path.join(self.current_path, 'yolov8s_pose_h8l_pi.hef')
 
         self.app_callback = app_callback
         

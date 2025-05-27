@@ -66,18 +66,11 @@ def read_trc_file(file_path):
     with open(file_path, 'r') as f:
         lines = f.readlines()
     
-    # 헤더 정보 파싱
-    header = {}
-    for line in lines[:3]:
-        if ':' in line:
-            key, value = line.strip().split(':', 1)
-            header[key.strip()] = value.strip()
-    
     # 데이터 시작 라인 찾기
     data_start = 0
     for i, line in enumerate(lines):
         if line.startswith('Frame#'):
-            data_start = i + 1
+            data_start = i + 2  # 헤더 다음 라인부터 데이터 시작
             break
     
     # 데이터 파싱
@@ -85,9 +78,10 @@ def read_trc_file(file_path):
     for line in lines[data_start:]:
         if line.strip():
             values = line.strip().split()
-            if len(values) > 1:  # 프레임 번호와 시간이 있는 경우
+            try:
+                frame_num = int(values[0])
                 frame_data = {
-                    'frame': int(values[0]),
+                    'frame': frame_num,
                     'time': float(values[1]),
                     'points': []
                 }
@@ -99,6 +93,9 @@ def read_trc_file(file_path):
                         z = float(values[i+2])
                         frame_data['points'].append([x, y, z])
                 data.append(frame_data)
+            except (ValueError, IndexError) as e:
+                print(f"Warning: Skipping invalid line: {line.strip()}")
+                continue
     
     return data
 

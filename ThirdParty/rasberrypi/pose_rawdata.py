@@ -109,67 +109,67 @@ def compute_bone_transforms_euler(
     transform_values = {
         'head': {
             'Location': [5.758485, 0.000000, 0.000000],
-            'Rotation': [0.000334, 0.000071, -12.291212],
+            'Rotation': [2.96E-06, 3E-07, -0.10705551, 0.99425305],
             'Scale': [1.0, 1.0, 1.0]
         },
         'upperarm_r': {
             'Location': [-15.285989, 0.000005, -0.000402],
-            'Rotation': [-3.269641, 5.224322, 0.091730],
+            'Rotation': [-0.02853594, 0.04553364, 0.00209955, 0.99855294],
             'Scale': [1.0, 1.0, 1.0]
         },
         'upperarm_l': {
             'Location': [15.286094, 0.000000, 0.000000],
-            'Rotation': [-3.269812, 5.224317, 0.091740],
+            'Rotation': [-0.02853744, 0.04553359, 0.00209971, 0.9985529],
             'Scale': [1.0, 1.0, 1.0]
         },
         'lowerarm_r': {
             'Location': [-27.089924, 0.000000, -0.000000],
-            'Rotation': [0.000000, -0.000000, 36.700416],
+            'Rotation': [0.0, 0.0, 0.31482431, 0.94914996],
             'Scale': [1.0, 1.0, 1.0]
         },
         'lowerarm_l': {
             'Location': [27.090353, -0.000000, -0.000000],
-            'Rotation': [-0.000000, 0.000000, 36.700416],
+            'Rotation': [0.0, 0.0, 0.31482431, 0.94914996],
             'Scale': [1.0, 1.0, 1.0]
         },
         'hand_r': {
             'Location': [-26.095495, 0.000000, 0.000000],
-            'Rotation': [-72.649020, -10.438207, -3.748059],
+            'Rotation': [-0.5919832, -0.05395765, -0.08009286, 0.80014348],
             'Scale': [1.0, 1.0, 1.0]
         },
         'hand_l': {
             'Location': [26.095160, -0.000000, 0.000000],
-            'Rotation': [-72.649020, -10.438207, -3.748059],
+            'Rotation': [-0.5919832, -0.05395765, -0.08009286, 0.80014348],
             'Scale': [1.0, 1.0, 1.0]
         },
         'thigh_r': {
             'Location': [-3.232044, 0.067992, 11.154600],
-            'Rotation': [8.475469, 2.390187, -175.202508],
+            'Rotation': [0.02387367, -0.07294364, -0.99623993, 0.04019042],
             'Scale': [1.0, 1.0, 1.0]
         },
         'thigh_l': {
             'Location': [-3.231992, 0.068032, -11.154586],
-            'Rotation': [8.475469, 2.390187, 4.797492],
+            'Rotation': [0.02387367, -0.07294364, -0.99623993, 0.04019042],
             'Scale': [1.0, 1.0, 1.0]
         },
         'calf_r': {
             'Location': [45.751938, 0.000000, -0.000000],
-            'Rotation': [-0.000000, -0.000000, 1.093458],
+            'Rotation': [0.0, 0.0, 0.00954208, 0.99995447],
             'Scale': [1.0, 1.0, 1.0]
         },
         'calf_l': {
             'Location': [-45.752037, -0.000000, 0.000000],
-            'Rotation': [-0.000000, -0.000000, 1.093458],
+            'Rotation': [0.0, 0.0, 0.00954208, 0.99995447],
             'Scale': [1.0, 1.0, 1.0]
         },
         'foot_r': {
             'Location': [41.705467, 0.000000, 0.000000],
-            'Rotation': [0.005113, -2.539827, -0.113795],
+            'Rotation': [2.26E-05, -0.02216239, -0.00099182, 0.99975389],
             'Scale': [1.0, 1.0, 1.0]
         },
         'foot_l': {
             'Location': [-41.705421, -0.000000, -0.000000],
-            'Rotation': [0.005113, -2.539827, -0.113795],
+            'Rotation': [2.26E-05, -0.02216239, -0.00099182, 0.99975389],
             'Scale': [1.0, 1.0, 1.0]
         }
     }
@@ -179,7 +179,7 @@ def compute_bone_transforms_euler(
         if bone in transform_values:
             transforms[bone] = {
                 'Location': transform_values[bone]['Location'],
-                'Rotation':transform_values[bone]['Rotation'],
+                'Rotation': transform_values[bone]['Rotation'],
                 'Scale': transform_values[bone]['Scale']
             }
     return transforms
@@ -315,7 +315,7 @@ def app_callback(pad, info, user_data):
                         print(transform)
                         transform_list.append({
                             "Location": transform['Location'],
-                            "Rotation": [transform['Rotation'][0], transform['Rotation'][1], transform['Rotation'][2], 0],
+                            "Rotation": transform['Rotation'],
                             "Scale": transform['Scale']
                         })
                 

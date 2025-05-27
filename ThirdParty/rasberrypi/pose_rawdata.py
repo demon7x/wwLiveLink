@@ -179,11 +179,7 @@ def compute_bone_transforms_euler(
         if bone in transform_values:
             transforms[bone] = {
                 'Location': transform_values[bone]['Location'],
-                'Rotation': {
-                    'Roll': transform_values[bone]['Rotation'][0],
-                    'Pitch': transform_values[bone]['Rotation'][1],
-                    'Yaw': transform_values[bone]['Rotation'][2]
-                },
+                'Rotation':transform_values[bone]['Rotation'],
                 'Scale': transform_values[bone]['Scale']
             }
     return transforms

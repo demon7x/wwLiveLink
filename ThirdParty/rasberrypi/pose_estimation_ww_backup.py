@@ -101,20 +101,21 @@ def read_trc_file(file_path):
 
 def get_bone_rotations(points_3d):
     rotations = []
+    # TRC 파일의 마커 구조에 맞는 본 매핑
     bone_mapping = {
-        'head': 0,           # nose
-        'upperarm_l': 11,    # left_shoulder
-        'upperarm_r': 12,    # right_shoulder
-        'lowerarm_l': 13,    # left_elbow
-        'lowerarm_r': 14,    # right_elbow
-        'hand_l': 15,        # left_wrist
-        'hand_r': 16,        # right_wrist
-        'thigh_l': 23,       # left_hip
-        'thigh_r': 24,       # right_hip
-        'calf_l': 25,        # left_knee
-        'calf_r': 26,        # right_knee
-        'foot_l': 27,        # left_ankle
-        'foot_r': 28,        # right_ankle
+        'head': 0,           # Hip
+        'upperarm_l': 1,     # RHip
+        'upperarm_r': 2,     # RKnee
+        'lowerarm_l': 3,     # RAnkle
+        'lowerarm_r': 4,     # RBigToe
+        'hand_l': 5,         # RSmallToe
+        'hand_r': 6,         # RHeel
+        'thigh_l': 7,        # LHip
+        'thigh_r': 8,        # LKnee
+        'calf_l': 9,         # LAnkle
+        'calf_r': 10,        # LBigToe
+        'foot_l': 11,        # LSmallToe
+        'foot_r': 12,        # LHeel
     }
     
     bone_hierarchy = [
@@ -149,20 +150,21 @@ def get_bone_rotations(points_3d):
 
 def get_bone_positions(points_3d):
     positions = []
+    # TRC 파일의 마커 구조에 맞는 본 매핑
     bone_mapping = {
-        'head': 0,
-        'upperarm_l': 11,
-        'upperarm_r': 12,
-        'lowerarm_l': 13,
-        'lowerarm_r': 14,
-        'hand_l': 15,
-        'hand_r': 16,
-        'thigh_l': 23,
-        'thigh_r': 24,
-        'calf_l': 25,
-        'calf_r': 26,
-        'foot_l': 27,
-        'foot_r': 28,
+        'head': 0,           # Hip
+        'upperarm_l': 1,     # RHip
+        'upperarm_r': 2,     # RKnee
+        'lowerarm_l': 3,     # RAnkle
+        'lowerarm_r': 4,     # RBigToe
+        'hand_l': 5,         # RSmallToe
+        'hand_r': 6,         # RHeel
+        'thigh_l': 7,        # LHip
+        'thigh_r': 8,        # LKnee
+        'calf_l': 9,         # LAnkle
+        'calf_r': 10,        # LBigToe
+        'foot_l': 11,        # LSmallToe
+        'foot_r': 12,        # LHeel
     }
     
     for bone_name in ['head', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r',

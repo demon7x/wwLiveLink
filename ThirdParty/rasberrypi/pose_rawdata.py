@@ -265,37 +265,17 @@ def app_callback(pad, info, user_data):
                 # 2D 포인트 추출
                 points_2d = np.array([[p.x() * width, p.y() * height] for p in points])
                 
-                # 바닥 각도 감지
-                floor_angle = detect_floor_angle(points_2d)
-                
-                # 스케일 계산
-                scale = calculate_scale(points_2d)
-                
-                # 3D 좌표로 변환
-                points_3d = map_2d_to_3d(
-                    keypoints_2d=points_2d,
-                    scale=scale,
-                    floor_angle_deg=floor_angle,
-                    origin_px=(width/2, height/2),
-                    depth=0.0,
-                    to_unreal=True
-                )
-                
                 if not skeleton_sent:
                     send_skeleton_structure()
                     skeleton_sent = True
                 
-                # 본 회전과 위치 계산
-                bone_rotations = get_bone_rotations(points_3d)
-                bone_positions = get_bone_positions(points_3d)
-                
-                # 본 트랜스폼 생성 (13개 본에 맞춤)
+                # 본 트랜스폼 생성 (원본 포인트 그대로 사용)
                 bone_transforms = []
-                for i in range(13):  # 13개의 본
+                for point in points_2d:
                     bone_transforms.append({
-                        "Location": bone_positions[i],
-                        "Rotation": bone_rotations[i],
-                        "Scale": [1,1,1]
+                        "Location": [point[0], point[1], 0.0],  # Z는 0으로 설정
+                        "Rotation": [0, 0, 0, 1],  # 기본 회전
+                        "Scale": [1, 1, 1]
                     })
                 
                 send_frame_animation(bone_transforms)
@@ -303,8 +283,6 @@ def app_callback(pad, info, user_data):
                 if user_data.use_frame:    
                     for point_2d in points_2d:
                         cv2.circle(frame, (int(point_2d[0]), int(point_2d[1])), 5, (0, 255, 0), -1)
-                    cv2.putText(frame, f"Floor Angle: {floor_angle:.1f}°", (10, 30), 
-                              cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     if user_data.use_frame:
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

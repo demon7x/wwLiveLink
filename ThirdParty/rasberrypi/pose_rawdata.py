@@ -170,19 +170,19 @@ def app_callback(pad, info, user_data):
     
     # 본 매핑 정의
     bone_map = {
-        'head': ('nose', 'neck'),
-        'upperarm_l': ('left_shoulder', 'left_elbow'),
-        'upperarm_r': ('right_shoulder', 'right_elbow'),
-        'lowerarm_l': ('left_elbow', 'left_wrist'),
-        'lowerarm_r': ('right_elbow', 'right_wrist'),
-        'hand_l': ('left_wrist', 'left_pinky'),
-        'hand_r': ('right_wrist', 'right_pinky'),
-        'thigh_l': ('left_hip', 'left_knee'),
-        'thigh_r': ('right_hip', 'right_knee'),
-        'calf_l': ('left_knee', 'left_ankle'),
-        'calf_r': ('right_knee', 'right_ankle'),
-        'foot_l': ('left_ankle', 'left_heel'),
-        'foot_r': ('right_ankle', 'right_heel'),
+        'head': ('point_0', 'point_1'),           # nose -> neck
+        'upperarm_l': ('point_5', 'point_7'),     # left_shoulder -> left_elbow
+        'upperarm_r': ('point_6', 'point_8'),     # right_shoulder -> right_elbow
+        'lowerarm_l': ('point_7', 'point_9'),     # left_elbow -> left_wrist
+        'lowerarm_r': ('point_8', 'point_10'),    # right_elbow -> right_wrist
+        'hand_l': ('point_9', 'point_11'),        # left_wrist -> left_pinky
+        'hand_r': ('point_10', 'point_12'),       # right_wrist -> right_pinky
+        'thigh_l': ('point_11', 'point_13'),      # left_hip -> left_knee
+        'thigh_r': ('point_12', 'point_14'),      # right_hip -> right_knee
+        'calf_l': ('point_13', 'point_15'),       # left_knee -> left_ankle
+        'calf_r': ('point_14', 'point_16'),       # right_knee -> right_ankle
+        'foot_l': ('point_15', 'point_17'),       # left_ankle -> left_heel
+        'foot_r': ('point_16', 'point_18'),       # right_ankle -> right_heel
     }
     
     for detection in detections:

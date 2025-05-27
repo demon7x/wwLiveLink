@@ -249,53 +249,93 @@ def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
 
 def get_bone_rotations(points_3d):
     """
-    모든 본의 회전을 계산합니다.
+    스켈레톤 구조에 맞는 13개의 본 회전을 계산합니다.
     """
     rotations = []
-    # COCO 키포인트 인덱스 매핑
-    bone_pairs = [
-        (0, 1),    # nose -> left_eye_inner
-        (1, 2),    # left_eye_inner -> left_eye
-        (2, 3),    # left_eye -> left_eye_outer
-        (0, 4),    # nose -> right_eye_inner
-        (4, 5),    # right_eye_inner -> right_eye
-        (5, 6),    # right_eye -> right_eye_outer
-        (0, 7),    # nose -> left_ear
-        (0, 8),    # nose -> right_ear
-        (0, 9),    # nose -> mouth_left
-        (0, 10),   # nose -> mouth_right
-        (0, 11),   # nose -> left_shoulder
-        (0, 12),   # nose -> right_shoulder
-        (11, 13),  # left_shoulder -> left_elbow
-        (12, 14),  # right_shoulder -> right_elbow
-        (13, 15),  # left_elbow -> left_wrist
-        (14, 16),  # right_elbow -> right_wrist
-        (15, 17),  # left_wrist -> left_pinky
-        (16, 18),  # right_wrist -> right_pinky
-        (15, 19),  # left_wrist -> left_index
-        (16, 20),  # right_wrist -> right_index
-        (15, 21),  # left_wrist -> left_thumb
-        (16, 22),  # right_wrist -> right_thumb
-        (0, 23),   # nose -> left_hip
-        (0, 24),   # nose -> right_hip
-        (23, 25),  # left_hip -> left_knee
-        (24, 26),  # right_hip -> right_knee
-        (25, 27),  # left_knee -> left_ankle
-        (26, 28),  # right_knee -> right_ankle
-        (27, 29),  # left_ankle -> left_heel
-        (28, 30),  # right_ankle -> right_heel
-        (29, 31),  # left_heel -> left_foot_index
-        (30, 32),  # right_heel -> right_foot_index
+    # 스켈레톤 구조에 맞는 본 매핑 (COCO 키포인트 -> 스켈레톤 본)
+    bone_mapping = {
+        'head': 0,           # nose
+        'upperarm_l': 11,    # left_shoulder
+        'upperarm_r': 12,    # right_shoulder
+        'lowerarm_l': 13,    # left_elbow
+        'lowerarm_r': 14,    # right_elbow
+        'hand_l': 15,        # left_wrist
+        'hand_r': 16,        # right_wrist
+        'thigh_l': 23,       # left_hip
+        'thigh_r': 24,       # right_hip
+        'calf_l': 25,        # left_knee
+        'calf_r': 26,        # right_knee
+        'foot_l': 27,        # left_ankle
+        'foot_r': 28,        # right_ankle
+    }
+    
+    # 본 계층 구조 정의
+    bone_hierarchy = [
+        ('head', None),          # head는 부모 없음
+        ('upperarm_l', 'head'),  # upperarm_l의 부모는 head
+        ('upperarm_r', 'head'),  # upperarm_r의 부모는 head
+        ('lowerarm_l', 'upperarm_l'),
+        ('lowerarm_r', 'upperarm_r'),
+        ('hand_l', 'lowerarm_l'),
+        ('hand_r', 'lowerarm_r'),
+        ('thigh_l', 'head'),
+        ('thigh_r', 'head'),
+        ('calf_l', 'thigh_l'),
+        ('calf_r', 'thigh_r'),
+        ('foot_l', 'calf_l'),
+        ('foot_r', 'calf_r'),
     ]
     
-    for parent_idx, child_idx in bone_pairs:
-        if parent_idx < len(points_3d) and child_idx < len(points_3d):
-            rot = calculate_bone_rotation(points_3d[parent_idx], points_3d[child_idx])
-            rotations.append(rot)
-        else:
+    # 각 본의 회전 계산
+    for bone_name, parent_name in bone_hierarchy:
+        if parent_name is None:
+            # head는 기본 회전
             rotations.append([0,0,0,1])
+        else:
+            # 부모-자식 본 사이의 회전 계산
+            parent_idx = bone_mapping[parent_name]
+            child_idx = bone_mapping[bone_name]
+            if parent_idx < len(points_3d) and child_idx < len(points_3d):
+                rot = calculate_bone_rotation(points_3d[parent_idx], points_3d[child_idx])
+                rotations.append(rot)
+            else:
+                rotations.append([0,0,0,1])
     
     return rotations
+
+def get_bone_positions(points_3d):
+    """
+    스켈레톤 구조에 맞는 13개의 본 위치를 계산합니다.
+    """
+    positions = []
+    # 스켈레톤 구조에 맞는 본 매핑
+    bone_mapping = {
+        'head': 0,           # nose
+        'upperarm_l': 11,    # left_shoulder
+        'upperarm_r': 12,    # right_shoulder
+        'lowerarm_l': 13,    # left_elbow
+        'lowerarm_r': 14,    # right_elbow
+        'hand_l': 15,        # left_wrist
+        'hand_r': 16,        # right_wrist
+        'thigh_l': 23,       # left_hip
+        'thigh_r': 24,       # right_hip
+        'calf_l': 25,        # left_knee
+        'calf_r': 26,        # right_knee
+        'foot_l': 27,        # left_ankle
+        'foot_r': 28,        # right_ankle
+    }
+    
+    # 각 본의 위치 추출
+    for bone_name in ['head', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r',
+                     'hand_l', 'hand_r', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r',
+                     'foot_l', 'foot_r']:
+        idx = bone_mapping[bone_name]
+        if idx < len(points_3d):
+            positions.append(points_3d[idx])
+        else:
+            positions.append([0,0,0])
+    
+    return positions
 
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
@@ -361,15 +401,16 @@ def app_callback(pad, info, user_data):
                     send_skeleton_structure()
                     skeleton_sent = True
                 
-                # 본 회전 계산
+                # 본 회전과 위치 계산
                 bone_rotations = get_bone_rotations(points_3d)
+                bone_positions = get_bone_positions(points_3d)
                 
-                # 본 트랜스폼 생성
+                # 본 트랜스폼 생성 (13개 본에 맞춤)
                 bone_transforms = []
-                for i, point_3d in enumerate(points_3d):
+                for i in range(13):  # 13개의 본
                     bone_transforms.append({
-                        "Location": point_3d.tolist(),
-                        "Rotation": bone_rotations[i] if i < len(bone_rotations) else [0,0,0,1],
+                        "Location": bone_positions[i].tolist(),
+                        "Rotation": bone_rotations[i],
                         "Scale": [1,1,1]
                     })
                 

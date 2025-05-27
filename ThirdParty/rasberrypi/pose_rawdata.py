@@ -40,25 +40,39 @@ def map_2d_to_3d(
     origin_px: tuple = (0, 0),
     depth: float = 0.0
 ) -> np.ndarray:
-    theta = np.deg2rad(floor_angle_deg)
-    c, s = np.cos(theta), np.sin(theta)
+    """
+    COCO 키포인트를 언리얼 엔진 좌표계로 변환
+    - COCO: (0,0)이 좌상단, y축이 아래로
+    - Unreal: (0,0,0)이 중심, y축이 앞으로, z축이 위로
+    """
+    # 이미지 좌표를 중심 기준으로 변환
     pts = keypoints_2d - np.array(origin_px)
-    x_plane = pts[:, 0] * c + pts[:, 1] * s
-    y_plane = -pts[:, 0] * s + pts[:, 1] * c
-    x_world = x_plane * scale
-    y_world = y_plane * scale
+    
+    # y축 방향 반전 (COCO -> Unreal)
+    pts[:, 1] = -pts[:, 1]
+    
+    # 스케일 적용
+    x_world = pts[:, 0] * scale
+    y_world = pts[:, 1] * scale
     z_world = np.full_like(x_world, depth)
+    
     return np.stack((x_world, y_world, z_world), axis=1)
 
 def quaternion_from_vectors(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
+    """
+    두 벡터 사이의 쿼터니언 계산
+    언리얼 엔진의 회전 순서: Roll -> Pitch -> Yaw
+    """
     v0 = v0 / np.linalg.norm(v0)
     v1 = v1 / np.linalg.norm(v1)
     dot = np.dot(v0, v1)
+    
     if dot < -0.999999:
         orth = np.array([1, 0, 0]) if abs(v0[0]) < 0.9 else np.array([0, 1, 0])
         axis = np.cross(v0, orth)
         axis /= np.linalg.norm(axis)
         return np.array([axis[0], axis[1], axis[2], 0.0])
+    
     axis = np.cross(v0, v1)
     s = np.sqrt((1.0 + dot) * 2.0)
     q_xyz = axis / s
@@ -67,39 +81,60 @@ def quaternion_from_vectors(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
     return q / np.linalg.norm(q)
 
 def quaternion_to_euler(q: np.ndarray) -> tuple:
+    """
+    쿼터니언을 언리얼 엔진 오일러 각도로 변환
+    언리얼 엔진의 회전 순서: Roll -> Pitch -> Yaw
+    """
     x, y, z, w = q
-    sinr = 2 * (w*x + y*z)
-    cosr = 1 - 2*(x*x + y*y)
+    
+    # Roll (Z축 회전)
+    sinr = 2 * (w*z + x*y)
+    cosr = 1 - 2*(y*y + z*z)
     roll = np.arctan2(sinr, cosr)
-    sinp = 2 * (w*y - z*x)
+    
+    # Pitch (X축 회전)
+    sinp = 2 * (w*x - y*z)
     pitch = np.arcsin(np.clip(sinp, -1.0, 1.0))
-    siny = 2 * (w*z + x*y)
-    cosy = 1 - 2*(y*y + z*z)
+    
+    # Yaw (Y축 회전)
+    siny = 2 * (w*y + z*x)
+    cosy = 1 - 2*(x*x + y*y)
     yaw = np.arctan2(siny, cosy)
-    return (np.rad2deg(pitch), np.rad2deg(yaw), np.rad2deg(roll))
+    
+    return (np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw))
 
 def compute_bone_transforms_euler(
     keypoints_3d: dict,
     bone_map: dict,
-    default_axis: np.ndarray = np.array([1.0, 0.0, 0.0]),
+    default_axis: np.ndarray = np.array([0.0, 1.0, 0.0]),  # 언리얼 엔진의 기본 전방 벡터
     scale_axis: str = 'identity'
 ) -> dict:
     transforms = {}
     for bone, (parent, child) in bone_map.items():
         p = np.array(keypoints_3d[parent], dtype=float)
         c = np.array(keypoints_3d[child], dtype=float)
+        
+        # 본의 위치는 부모와 자식의 중점
         loc = ((p + c) / 2.0).tolist()
+        
+        # 본의 방향 벡터
         dir_vec = c - p
         length = np.linalg.norm(dir_vec)
+        
         if length < 1e-6:
             dir_vec = default_axis
             length = 0.0
+        
+        # 본의 회전 계산
         q = quaternion_from_vectors(default_axis, dir_vec)
-        pitch, yaw, roll = quaternion_to_euler(q)
+        roll, pitch, yaw = quaternion_to_euler(q)
+        
+        # 본의 스케일
         scale = [length, 1.0, 1.0] if scale_axis == 'length' else [1.0, 1.0, 1.0]
+        
         transforms[bone] = {
             'Location': loc,
-            'Rotation': {'Pitch': pitch, 'Yaw': yaw, 'Roll': roll},
+            'Rotation': {'Roll': roll, 'Pitch': pitch, 'Yaw': yaw},
             'Scale': scale
         }
     return transforms
@@ -170,21 +205,29 @@ def app_callback(pad, info, user_data):
     
     # 본 매핑 정의 (COCO 17개 키포인트 기준)
     bone_map = {
-        'head': ('point_0', 'point_1'),           # nose -> neck
-        'upperarm_l': ('point_5', 'point_7'),     # left_shoulder -> left_elbow
-        'upperarm_r': ('point_6', 'point_8'),     # right_shoulder -> right_elbow
-        'lowerarm_l': ('point_7', 'point_9'),     # left_elbow -> left_wrist
-        'lowerarm_r': ('point_8', 'point_10'),    # right_elbow -> right_wrist
-        'hand_l': ('point_9', 'point_9'),         # left_wrist (끝점)
-        'hand_r': ('point_10', 'point_10'),       # right_wrist (끝점)
-        'thigh_l': ('point_11', 'point_13'),      # left_hip -> left_knee
-        'thigh_r': ('point_12', 'point_14'),      # right_hip -> right_knee
-        'calf_l': ('point_13', 'point_15'),       # left_knee -> left_ankle
-        'calf_r': ('point_14', 'point_16'),       # right_knee -> right_ankle
-        'foot_l': ('point_15', 'point_15'),       # left_ankle (끝점)
-        'foot_r': ('point_16', 'point_16'),       # right_ankle (끝점)
+        'head': ('nose', 'neck'),                 # nose -> neck
+        'upperarm_l': ('left_shoulder', 'left_elbow'),     # left_shoulder -> left_elbow
+        'upperarm_r': ('right_shoulder', 'right_elbow'),   # right_shoulder -> right_elbow
+        'lowerarm_l': ('left_elbow', 'left_wrist'),        # left_elbow -> left_wrist
+        'lowerarm_r': ('right_elbow', 'right_wrist'),      # right_elbow -> right_wrist
+        'hand_l': ('left_wrist', 'left_wrist'),            # left_wrist (끝점)
+        'hand_r': ('right_wrist', 'right_wrist'),          # right_wrist (끝점)
+        'thigh_l': ('left_hip', 'left_knee'),              # left_hip -> left_knee
+        'thigh_r': ('right_hip', 'right_knee'),            # right_hip -> right_knee
+        'calf_l': ('left_knee', 'left_ankle'),             # left_knee -> left_ankle
+        'calf_r': ('right_knee', 'right_ankle'),           # right_knee -> right_ankle
+        'foot_l': ('left_ankle', 'left_ankle'),            # left_ankle (끝점)
+        'foot_r': ('right_ankle', 'right_ankle'),          # right_ankle (끝점)
     }
-    
+
+    # COCO 키포인트 이름 정의
+    coco_keypoints = [
+        'nose', 'neck', 'right_shoulder', 'right_elbow', 'right_wrist',
+        'left_shoulder', 'left_elbow', 'left_wrist', 'right_hip', 'right_knee',
+        'right_ankle', 'left_hip', 'left_knee', 'left_ankle', 'right_eye',
+        'left_eye', 'right_ear', 'left_ear'
+    ]
+
     for detection in detections:
         label = detection.get_label()
         bbox = detection.get_bbox()
@@ -212,7 +255,7 @@ def app_callback(pad, info, user_data):
                 
                 # 본 트랜스폼 계산
                 bone_transforms = compute_bone_transforms_euler(
-                    {f"point_{i}": point for i, point in enumerate(points_3d)},
+                    {coco_keypoints[i]: point for i, point in enumerate(points_3d)},
                     bone_map,
                     scale_axis='length'
                 )
@@ -226,9 +269,9 @@ def app_callback(pad, info, user_data):
                         transform = bone_transforms[bone]
                         transform_list.append({
                             "Location": transform['Location'],
-                            "Rotation": [transform['Rotation']['Pitch'], 
+                            "Rotation": [transform['Rotation']['Roll'], 
+                                       transform['Rotation']['Pitch'], 
                                        transform['Rotation']['Yaw'], 
-                                       transform['Rotation']['Roll'], 
                                        1.0],
                             "Scale": transform['Scale']
                         })

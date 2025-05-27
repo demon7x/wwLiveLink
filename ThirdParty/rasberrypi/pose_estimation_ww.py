@@ -112,8 +112,8 @@ def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0], is_thigh
         # 벡터를 언리얼 엔진의 좌표계로 변환
         v_norm = np.array([v_norm[0], v_norm[1], -v_norm[2]])
         
-        # 90도 회전 보정을 위한 추가 쿼터니언
-        correction_angle = np.pi / 2  # 90도
+        # -90도 회전 보정을 위한 추가 쿼터니언
+        correction_angle = -np.pi / 2  # -90도
         correction_quat = [
             np.sin(correction_angle/2),  # x
             0,                           # y

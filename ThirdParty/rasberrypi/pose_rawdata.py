@@ -48,15 +48,12 @@ def map_2d_to_3d(
     # 이미지 좌표를 중심 기준으로 변환
     pts = keypoints_2d - np.array(origin_px)
     
-    # y축 방향 반전 (COCO -> Unreal)
-    pts[:, 1] = -pts[:, 1]
+    # 스케일 적용 및 좌표계 변환
+    x_world = pts[:, 0] * scale  # COCO x -> Unreal x
+    y_world = pts[:, 1] * scale  # COCO y -> Unreal z (높이)
+    z_world = np.zeros_like(x_world)  # COCO z -> Unreal y (전방)
     
-    # 스케일 적용
-    x_world = pts[:, 0] * scale
-    y_world = pts[:, 1] * scale
-    z_world = np.full_like(x_world, depth)
-    
-    return np.stack((x_world, y_world, z_world), axis=1)
+    return np.stack((x_world, z_world, y_world), axis=1)
 
 def quaternion_from_vectors(v0: np.ndarray, v1: np.ndarray) -> np.ndarray:
     """
@@ -106,7 +103,7 @@ def quaternion_to_euler(q: np.ndarray) -> tuple:
 def compute_bone_transforms_euler(
     keypoints_3d: dict,
     bone_map: dict,
-    default_axis: np.ndarray = np.array([0.0, 1.0, 0.0]),  # 언리얼 엔진의 기본 전방 벡터
+    default_axis: np.ndarray = np.array([0.0, 0.0, 1.0]),  # 언리얼 엔진의 기본 상방 벡터
     scale_axis: str = 'identity'
 ) -> dict:
     transforms = {}

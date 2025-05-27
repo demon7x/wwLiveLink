@@ -70,43 +70,57 @@ def send_frame_animation(bone_transforms):
     sock.sendto(msg, (UDP_IP, UDP_PORT))
     log_udp_message(msg)
 
-def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
-    """
-    부모-자식 본 사이의 회전을 계산합니다.
-    target_axis: 본이 가리키는 방향 (기본값: x축)
-    """
-    v = np.array(child_pos) - np.array(parent_pos)
-    norm = np.linalg.norm(v)
-    if norm < 1e-6:
-        return [0,0,0,1]
-    v_norm = v / norm
-    rot = R.align_vectors([v_norm], [target_axis])[0].as_quat()
-    return rot.tolist()  # [x, y, z, w]
-
 def map_2d_to_3d(
     keypoints_2d: np.ndarray,
     scale: float,
     floor_angle_deg: float,
     origin_px: tuple = (0, 0),
-    depth: float = 0.0,
-    to_unreal: bool = False,
-    unreal_scale: float = 100.0
+    depth: float = 0.0
 ) -> np.ndarray:
     """
-    2D COCO 키포인트(pixel) 배열을 3D 평면 좌표로 매핑합니다.
+    COCO 키포인트를 언리얼 엔진 좌표계로 변환
+    - COCO: (0,0)이 좌상단, y축이 아래로
+    - Unreal: (0,0,0)이 중심, y축이 앞으로, z축이 위로
     """
-    theta = np.deg2rad(floor_angle_deg)
-    c, s = np.cos(theta), np.sin(theta)
+    # 이미지 좌표를 중심 기준으로 변환
     pts = keypoints_2d - np.array(origin_px)
-    x_plane = pts[:, 0] * c + pts[:, 1] * s
-    y_plane = -pts[:, 0] * s + pts[:, 1] * c
-    x_world = x_plane * scale
-    y_world = y_plane * scale
-    z_world = np.full_like(x_world, depth)
-    points3d = np.stack((x_world, y_world, z_world), axis=1)
-    if to_unreal:
-        points3d *= unreal_scale
-    return points3d
+    
+    # 스케일 적용 및 좌표계 변환
+    x_world = pts[:, 0] * 0.0178  # COCO x -> Unreal x (스케일 조정)
+    y_world = np.zeros_like(x_world)  # COCO y -> Unreal y (전방)
+    z_world = np.zeros_like(x_world)  # COCO z -> Unreal z (높이)
+    
+    return np.stack((x_world, y_world, z_world), axis=1)
+
+def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
+    """
+    부모-자식 본 사이의 회전을 쿼터니언으로 계산합니다.
+    """
+    v = np.array(child_pos) - np.array(parent_pos)
+    norm = np.linalg.norm(v)
+    if norm < 1e-6:
+        return [0,0,0,1]  # 기본 쿼터니언
+    
+    v_norm = v / norm
+    target = np.array(target_axis)
+    
+    # 두 벡터 사이의 회전축과 각도 계산
+    axis = np.cross(v_norm, target)
+    axis_norm = np.linalg.norm(axis)
+    
+    if axis_norm < 1e-6:
+        return [0,0,0,1]  # 벡터가 평행한 경우
+    
+    axis = axis / axis_norm
+    dot = np.clip(np.dot(v_norm, target), -1.0, 1.0)
+    angle = np.arccos(dot)
+    
+    # 쿼터니언 계산
+    half_angle = angle / 2
+    sin_half = np.sin(half_angle)
+    cos_half = np.cos(half_angle)
+    
+    return [axis[0] * sin_half, axis[1] * sin_half, axis[2] * sin_half, cos_half]
 
 def detect_floor_angle(points_2d: np.ndarray) -> float:
     """
@@ -136,26 +150,9 @@ def calculate_scale(points_2d: np.ndarray, real_height_m: float = 1.7) -> float:
 
 def get_bone_rotations(points_3d):
     """
-    스켈레톤 구조에 맞는 13개의 본 회전을 계산합니다.
+    스켈레톤 구조에 맞는 본 회전을 쿼터니언으로 계산합니다.
     """
     rotations = []
-    # 스켈레톤 구조에 맞는 본 매핑 (COCO 키포인트 -> 스켈레톤 본)
-    bone_mapping = {
-        'head': 0,           # nose
-        'upperarm_l': 11,    # left_shoulder
-        'upperarm_r': 12,    # right_shoulder
-        'lowerarm_l': 13,    # left_elbow
-        'lowerarm_r': 14,    # right_elbow
-        'hand_l': 15,        # left_wrist
-        'hand_r': 16,        # right_wrist
-        'thigh_l': 23,       # left_hip
-        'thigh_r': 24,       # right_hip
-        'calf_l': 25,        # left_knee
-        'calf_r': 26,        # right_knee
-        'foot_l': 27,        # left_ankle
-        'foot_r': 28,        # right_ankle
-    }
-    
     # 본 계층 구조 정의
     bone_hierarchy = [
         ('head', None),          # head는 부모 없음
@@ -173,6 +170,23 @@ def get_bone_rotations(points_3d):
         ('foot_r', 'calf_r'),
     ]
     
+    # COCO 키포인트 인덱스 매핑
+    keypoint_indices = {
+        'head': 0,           # nose
+        'upperarm_l': 5,     # left_shoulder
+        'upperarm_r': 6,     # right_shoulder
+        'lowerarm_l': 7,     # left_elbow
+        'lowerarm_r': 8,     # right_elbow
+        'hand_l': 9,         # left_wrist
+        'hand_r': 10,        # right_wrist
+        'thigh_l': 11,       # left_hip
+        'thigh_r': 12,       # right_hip
+        'calf_l': 13,        # left_knee
+        'calf_r': 14,        # right_knee
+        'foot_l': 15,        # left_ankle
+        'foot_r': 16,        # right_ankle
+    }
+    
     # 각 본의 회전 계산
     for bone_name, parent_name in bone_hierarchy:
         if parent_name is None:
@@ -180,8 +194,8 @@ def get_bone_rotations(points_3d):
             rotations.append([0,0,0,1])
         else:
             # 부모-자식 본 사이의 회전 계산
-            parent_idx = bone_mapping[parent_name]
-            child_idx = bone_mapping[bone_name]
+            parent_idx = keypoint_indices[parent_name]
+            child_idx = keypoint_indices[bone_name]
             if parent_idx < len(points_3d) and child_idx < len(points_3d):
                 rot = calculate_bone_rotation(points_3d[parent_idx], points_3d[child_idx])
                 rotations.append(rot)
@@ -192,31 +206,31 @@ def get_bone_rotations(points_3d):
 
 def get_bone_positions(points_3d):
     """
-    스켈레톤 구조에 맞는 13개의 본 위치를 계산합니다.
+    스켈레톤 구조에 맞는 본 위치를 계산합니다.
     """
     positions = []
-    # 스켈레톤 구조에 맞는 본 매핑
-    bone_mapping = {
+    # COCO 키포인트 인덱스 매핑
+    keypoint_indices = {
         'head': 0,           # nose
-        'upperarm_l': 11,    # left_shoulder
-        'upperarm_r': 12,    # right_shoulder
-        'lowerarm_l': 13,    # left_elbow
-        'lowerarm_r': 14,    # right_elbow
-        'hand_l': 15,        # left_wrist
-        'hand_r': 16,        # right_wrist
-        'thigh_l': 23,       # left_hip
-        'thigh_r': 24,       # right_hip
-        'calf_l': 25,        # left_knee
-        'calf_r': 26,        # right_knee
-        'foot_l': 27,        # left_ankle
-        'foot_r': 28,        # right_ankle
+        'upperarm_l': 5,     # left_shoulder
+        'upperarm_r': 6,     # right_shoulder
+        'lowerarm_l': 7,     # left_elbow
+        'lowerarm_r': 8,     # right_elbow
+        'hand_l': 9,         # left_wrist
+        'hand_r': 10,        # right_wrist
+        'thigh_l': 11,       # left_hip
+        'thigh_r': 12,       # right_hip
+        'calf_l': 13,        # left_knee
+        'calf_r': 14,        # right_knee
+        'foot_l': 15,        # left_ankle
+        'foot_r': 16,        # right_ankle
     }
     
     # 각 본의 위치 추출
     for bone_name in ['head', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r',
                      'hand_l', 'hand_r', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r',
                      'foot_l', 'foot_r']:
-        idx = bone_mapping[bone_name]
+        idx = keypoint_indices[bone_name]
         if idx < len(points_3d):
             positions.append(points_3d[idx].tolist())
         else:
@@ -265,31 +279,23 @@ def app_callback(pad, info, user_data):
                 # 2D 포인트 추출
                 points_2d = np.array([[p.x() * width, p.y() * height] for p in points])
                 
-                # 바닥 각도 감지
-                floor_angle = detect_floor_angle(points_2d)
-                
-                # 스케일 계산
-                scale = calculate_scale(points_2d)
+                if not skeleton_sent:
+                    send_skeleton_structure()
+                    skeleton_sent = True
                 
                 # 3D 좌표로 변환
                 points_3d = map_2d_to_3d(
                     keypoints_2d=points_2d,
-                    scale=scale,
-                    floor_angle_deg=floor_angle,
-                    origin_px=(width/2, height/2),
-                    depth=0.0,
-                    to_unreal=True
+                    scale=0.0178,  # 스프레드시트 예시와 동일한 스케일
+                    floor_angle_deg=0.0,
+                    origin_px=(width/2, height/2)
                 )
-                
-                if not skeleton_sent:
-                    send_skeleton_structure()
-                    skeleton_sent = True
                 
                 # 본 회전과 위치 계산
                 bone_rotations = get_bone_rotations(points_3d)
                 bone_positions = get_bone_positions(points_3d)
                 
-                # 본 트랜스폼 생성 (13개 본에 맞춤)
+                # 본 트랜스폼 생성
                 bone_transforms = []
                 for i in range(13):  # 13개의 본
                     bone_transforms.append({
@@ -303,8 +309,6 @@ def app_callback(pad, info, user_data):
                 if user_data.use_frame:    
                     for point_2d in points_2d:
                         cv2.circle(frame, (int(point_2d[0]), int(point_2d[1])), 5, (0, 255, 0), -1)
-                    cv2.putText(frame, f"Floor Angle: {floor_angle:.1f}°", (10, 30), 
-                              cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     if user_data.use_frame:
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)

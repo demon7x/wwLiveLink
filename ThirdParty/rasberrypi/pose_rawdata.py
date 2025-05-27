@@ -307,9 +307,9 @@ def app_callback(pad, info, user_data):
                 
                 # 트랜스폼 리스트로 변환
                 transform_list = []
-                for bone in ['head', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r',
-                           'hand_l', 'hand_r', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r',
-                           'foot_l', 'foot_r']:
+                for bone in ['head', 'upperarm_r', 'upperarm_l', 'lowerarm_r', 'lowerarm_l',
+                           'hand_r', 'hand_l', 'thigh_r', 'thigh_l', 'calf_r', 'calf_l',
+                           'foot_r', 'foot_l']:
                     if bone in bone_transforms:
                         transform = bone_transforms[bone]
                         transform_list.append({

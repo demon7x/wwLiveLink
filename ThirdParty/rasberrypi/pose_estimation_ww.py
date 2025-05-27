@@ -70,118 +70,18 @@ def send_frame_animation(bone_transforms):
     sock.sendto(msg, (UDP_IP, UDP_PORT))
     log_udp_message(msg)
 
-# T-Pose 기준 본별 트랜스폼 (X, Y, Z)
-TPOSE_BONE_LOCATIONS = [
-    [-0.000001, 0.138235, 162.503119],   # head
-    [16.055346, -2.507836, 142.836729],  # upperarm_l
-    [-16.055299, -2.507837, 142.836686], # upperarm_r
-    [43.121829, -3.260803, 143.688663],  # lowerarm_l
-    [-43.121353, -3.260791, 143.688607], # lowerarm_r
-    [69.100656, -0.937592, 144.501407],  # hand_l
-    [-69.100513, -0.937534, 144.501369], # hand_r
-    [11.154586, 2.650447, 95.471892],    # thigh_l
-    [-11.154600, 2.650411, 95.471838],   # thigh_r
-    [13.062653, 1.697236, 49.769600],    # calf_l
-    [-13.062663, 1.697201, 49.769644],   # calf_r
-    [14.684443, 0.041375, 8.128633],     # foot_l
-    [-14.684455, 0.041339, 8.128632],    # foot_r
-]
-
-# Parent 인덱스 (skeleton_message 순서와 일치)
-PARENT_INDICES = [
-    -1,  # head
-    0,   # upperarm_l
-    0,   # upperarm_r
-    1,   # lowerarm_l
-    2,   # lowerarm_r
-    3,   # hand_l
-    4,   # hand_r
-    0,   # thigh_l
-    0,   # thigh_r
-    7,   # calf_l
-    8,   # calf_r
-    9,   # foot_l
-    10,  # foot_r
-]
-
-# T-Pose Local 위치값 (예시)
-TPOSE_LOCAL_LOCATIONS = [
-    [5.758485, 0.000000, 0.000000],      # head
-    [15.286094, 0.000000, 0.000000],     # upperarm_l
-    [-15.285989, 0.000005, -0.000402],   # upperarm_r
-    [27.090353, -0.000000, -0.000000],   # lowerarm_l
-    [-27.089924, 0.000000, -0.000000],   # lowerarm_r
-    [26.095160, -0.000000, 0.000000],    # hand_l
-    [-26.095495, 0.000000, 0.000000],    # hand_r
-    [-3.231992, 0.068032, -11.154586],   # thigh_l
-    [-3.232044, 0.067992, 11.154600],    # thigh_r
-    [-45.752037, -0.000000, 0.000000],   # calf_l
-    [45.751938, 0.000000, -0.000000],    # calf_r
-    [-41.705421, -0.000000, -0.000000],  # foot_l
-    [41.705467, 0.000000, 0.000000],     # foot_r
-]
-
-def world_to_local_positions(bone_world_positions, parent_indices):
-    bone_local_positions = []
-    for i, pos in enumerate(bone_world_positions):
-        parent_idx = parent_indices[i]
-        if parent_idx == -1:
-            bone_local_positions.append(pos)
-        else:
-            parent_pos = bone_world_positions[parent_idx]
-            local_pos = [p - q for p, q in zip(pos, parent_pos)]
-            bone_local_positions.append(local_pos)
-    return bone_local_positions
-
-def world_to_local_with_tpose(bone_world_positions, tpose_world_positions, tpose_local_positions, parent_indices):
-    bone_local_positions = []
-    for i, pos in enumerate(bone_world_positions):
-        parent_idx = parent_indices[i]
-        if parent_idx == -1:
-            bone_local_positions.append(tpose_local_positions[i])
-        else:
-            parent_pos = bone_world_positions[parent_idx]
-            tpose_parent_pos = tpose_world_positions[parent_idx]
-            delta = [ (p - q) - (tp - tq) for p, q, tp, tq in zip(pos, parent_pos, tpose_world_positions[i], tpose_parent_pos) ]
-            local_pos = [t + d for t, d in zip(tpose_local_positions[i], delta)]
-            bone_local_positions.append(local_pos)
-    return bone_local_positions
-
-def yolo_to_unreal_relative(x, y, img_w, img_h, tpose_loc, scale=0.1):
-    x_pixel = x * img_w
-    y_pixel = y * img_h
-    x_unreal = (x_pixel - img_w / 2) * scale + tpose_loc[0]
-    y_unreal = - (y_pixel - img_h / 2) * scale + tpose_loc[1]
-    z_unreal = tpose_loc[2]
-    return [x_unreal, y_unreal, z_unreal]
-
-def normalize_and_scale(points, key_height_cm=160):
-    # points: [[x, y, 0], ...] (정규화 0~1)
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    x_center = sum(xs) / len(xs)
-    y_top = min(ys)
-    y_bottom = max(ys)
-    y_height = y_bottom - y_top if y_bottom > y_top else 1e-5
-    scale = key_height_cm / y_height / 5.0
-    result = []
-    for x, y, _ in points:
-        x_new = (x - x_center) * scale
-        z_new = (1 - y) * scale  # y축 반전 후 z로
-        y_new = 0  # 2D이므로 y는 0(혹은 필요시 좌우로 이동)
-        result.append([x_new, y_new, z_new])
-    return result
-
-def two_bone_ik(start, mid, end):
-    upper = np.array(mid) - np.array(start)
-    lower = np.array(end) - np.array(mid)
-    if np.linalg.norm(upper) < 1e-6 or np.linalg.norm(lower) < 1e-6:
-        return [0,0,0,1], [0,0,0,1]
-    upper_norm = upper / np.linalg.norm(upper)
-    lower_norm = lower / np.linalg.norm(lower)
-    rot_shoulder = R.align_vectors([upper_norm], [[1,0,0]])[0].as_quat().tolist()
-    rot_elbow = R.align_vectors([lower_norm], [upper_norm])[0].as_quat().tolist()
-    return rot_shoulder, rot_elbow
+def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
+    """
+    부모-자식 본 사이의 회전을 계산합니다.
+    target_axis: 본이 가리키는 방향 (기본값: x축)
+    """
+    v = np.array(child_pos) - np.array(parent_pos)
+    norm = np.linalg.norm(v)
+    if norm < 1e-6:
+        return [0,0,0,1]
+    v_norm = v / norm
+    rot = R.align_vectors([v_norm], [target_axis])[0].as_quat()
+    return rot.tolist()  # [x, y, z, w]
 
 def map_2d_to_3d(
     keypoints_2d: np.ndarray,
@@ -233,19 +133,6 @@ def calculate_scale(points_2d: np.ndarray, real_height_m: float = 1.7) -> float:
     ankle_mid = (left_ankle + right_ankle) / 2
     pixel_height = np.linalg.norm(head - ankle_mid)
     return real_height_m / pixel_height
-
-def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0]):
-    """
-    부모-자식 본 사이의 회전을 계산합니다.
-    target_axis: 본이 가리키는 방향 (기본값: x축)
-    """
-    v = np.array(child_pos) - np.array(parent_pos)
-    norm = np.linalg.norm(v)
-    if norm < 1e-6:
-        return [0,0,0,1]
-    v_norm = v / norm
-    rot = R.align_vectors([v_norm], [target_axis])[0].as_quat()
-    return rot.tolist()  # [x, y, z, w]
 
 def get_bone_rotations(points_3d):
     """
@@ -331,7 +218,7 @@ def get_bone_positions(points_3d):
                      'foot_l', 'foot_r']:
         idx = bone_mapping[bone_name]
         if idx < len(points_3d):
-            positions.append(points_3d[idx].tolist())  # NumPy 배열을 리스트로 변환
+            positions.append(points_3d[idx].tolist())
         else:
             positions.append([0,0,0])
     
@@ -340,7 +227,6 @@ def get_bone_positions(points_3d):
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function
 # -----------------------------------------------------------------------------------------------
-# Inheritance from the app_callback_class
 class user_app_callback_class(app_callback_class):
     def __init__(self):
         super().__init__()
@@ -348,8 +234,6 @@ class user_app_callback_class(app_callback_class):
 # -----------------------------------------------------------------------------------------------
 # User-defined callback function
 # -----------------------------------------------------------------------------------------------
-
-# This is the callback function that will be called when data is available from the pipeline
 def app_callback(pad, info, user_data):
     global skeleton_sent
     buffer = info.get_buffer()
@@ -409,8 +293,8 @@ def app_callback(pad, info, user_data):
                 bone_transforms = []
                 for i in range(13):  # 13개의 본
                     bone_transforms.append({
-                        "Location": bone_positions[i],  # 이미 리스트로 변환됨
-                        "Rotation": bone_rotations[i],  # 이미 리스트로 변환됨
+                        "Location": bone_positions[i],
+                        "Rotation": bone_rotations[i],
                         "Scale": [1,1,1]
                     })
                 
@@ -428,59 +312,22 @@ def app_callback(pad, info, user_data):
 
     print(string_to_print)
     return Gst.PadProbeReturn.OK
-    
 
-
-# This function can be used to get the COCO keypoints coorespondence map
-def get_keypoints():
-    """Get the COCO keypoints and their left/right flip coorespondence map."""
-    keypoints = {
-        'nose': 1,
-        'left_eye': 2,
-        'right_eye': 3,
-        'left_ear': 4,
-        'right_ear': 5,
-        'left_shoulder': 6,
-        'right_shoulder': 7,
-        'left_elbow': 8,
-        'right_elbow': 9,
-        'left_wrist': 10,
-        'right_wrist': 11,
-        'left_hip': 12,
-        'right_hip': 13,
-        'left_knee': 14,
-        'right_knee': 15,
-        'left_ankle': 16,
-        'right_ankle': 17,
-    }
-
-    return keypoints
-#-----------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------
 # User Gstreamer Application
 # -----------------------------------------------------------------------------------------------
-
-# This class inherits from the hailo_rpi_common.GStreamerApp class
-
 class GStreamerPoseEstimationApp(GStreamerApp):
     def __init__(self, args, user_data):
-        # Call the parent class constructor
         super().__init__(args, user_data)
-        # Additional initialization code can be added here
-        # Set Hailo parameters these parameters should be set based on the model used
         self.batch_size = 2
         self.network_width = 640
         self.network_height = 640
         self.network_format = "RGB"
         self.default_postprocess_so = os.path.join(self.postprocess_dir, 'libyolov8pose_post.so')
         self.post_function_name = "filter"
-        #self.hef_path = os.path.join(self.current_path, '../../Resources/hailo8l/pose_landmark_full.hef')
         self.hef_path = os.path.join(self.current_path, 'yolov8s_pose_h8l_pi.hef')
-
         self.app_callback = app_callback
-        
-        # Set the process title
         setproctitle.setproctitle("Hailo Pose Estimation App")
-
         self.create_pipeline()
 
     def get_pipeline_string(self):
@@ -505,7 +352,6 @@ class GStreamerPoseEstimationApp(GStreamerApp):
         source_element += f"videoconvert n-threads=3 name=src_convert qos=false ! "
         source_element += f"video/x-raw, format={self.network_format}, width={self.network_width}, height={self.network_height}, pixel-aspect-ratio=1/1 ! "
         
-        
         pipeline_string = "hailomuxer name=hmux "
         pipeline_string += source_element
         pipeline_string += "tee name=t ! "
@@ -529,7 +375,6 @@ class GStreamerPoseEstimationApp(GStreamerApp):
         return pipeline_string
     
 if __name__ == "__main__":
-    # Create an instance of the user app callback class
     user_data = user_app_callback_class()
     parser = get_default_parser()
     args = parser.parse_args()

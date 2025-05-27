@@ -86,7 +86,7 @@ def map_2d_to_3d(
     pts = keypoints_2d - np.array(origin_px)
     
     # 스케일 적용 및 좌표계 변환
-    x_world = pts[:, 0] * 0.0712  # COCO x -> Unreal x (스케일 조정)
+    x_world = pts[:, 0] * 0.1424  # COCO x -> Unreal x (스케일 조정)
     y_world = np.zeros_like(x_world)  # COCO y -> Unreal y (전방)
     z_world = np.zeros_like(x_world)  # COCO z -> Unreal z (높이)
     
@@ -286,7 +286,7 @@ def app_callback(pad, info, user_data):
                 # 3D 좌표로 변환
                 points_3d = map_2d_to_3d(
                     keypoints_2d=points_2d,
-                    scale=0.0712,  # 스프레드시트 예시와 동일한 스케일의 4배
+                    scale=0.1424,  # 스프레드시트 예시와 동일한 스케일의 8배
                     floor_angle_deg=0.0,
                     origin_px=(width/2, height/2)
                 )

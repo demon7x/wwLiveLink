@@ -103,13 +103,16 @@ def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0], is_thigh
         return [0,0,0,1]  # 기본 쿼터니언
     
     v_norm = v / norm
-    target = np.array(target_axis)
     
     if is_thigh:
         # thigh의 경우 언리얼 엔진의 좌표계에 맞게 회전 조정
-        # Y축이 전방, Z축이 상방인 왼손 좌표계 고려
-        v_norm = np.array([v_norm[0], -v_norm[1], -v_norm[2]])
-        target = np.array([target[0], -target[1], -target[2]])
+        # 기본 방향을 [0, 0, -1]로 설정 (아래쪽 방향)
+        target = np.array([0, 0, -1])
+        
+        # 벡터를 언리얼 엔진의 좌표계로 변환
+        v_norm = np.array([v_norm[0], v_norm[1], -v_norm[2]])
+    else:
+        target = np.array(target_axis)
     
     # 두 벡터 사이의 회전축과 각도 계산
     axis = np.cross(v_norm, target)
@@ -127,7 +130,11 @@ def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0], is_thigh
     sin_half = np.sin(half_angle)
     cos_half = np.cos(half_angle)
     
-    return [axis[0] * sin_half, axis[1] * sin_half, axis[2] * sin_half, cos_half]
+    # thigh의 경우 회전 방향 보정
+    if is_thigh:
+        return [-axis[0] * sin_half, -axis[1] * sin_half, axis[2] * sin_half, cos_half]
+    else:
+        return [axis[0] * sin_half, axis[1] * sin_half, axis[2] * sin_half, cos_half]
 
 def detect_floor_angle(points_2d: np.ndarray) -> float:
     """

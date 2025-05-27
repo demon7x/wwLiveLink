@@ -331,7 +331,7 @@ def get_bone_positions(points_3d):
                      'foot_l', 'foot_r']:
         idx = bone_mapping[bone_name]
         if idx < len(points_3d):
-            positions.append(points_3d[idx])
+            positions.append(points_3d[idx].tolist())  # NumPy 배열을 리스트로 변환
         else:
             positions.append([0,0,0])
     
@@ -409,8 +409,8 @@ def app_callback(pad, info, user_data):
                 bone_transforms = []
                 for i in range(13):  # 13개의 본
                     bone_transforms.append({
-                        "Location": bone_positions[i],  # 이미 리스트 형태이므로 tolist() 제거
-                        "Rotation": bone_rotations[i],
+                        "Location": bone_positions[i],  # 이미 리스트로 변환됨
+                        "Rotation": bone_rotations[i],  # 이미 리스트로 변환됨
                         "Scale": [1,1,1]
                     })
                 

@@ -118,16 +118,34 @@ def compute_bone_transforms_euler(
         dir_vec = c - p
         length = np.linalg.norm(dir_vec)
         
-        if length < 1e-6:
+        # 회전값 계산
+        # 1. 방향 벡터를 정규화
+        if length > 1e-6:
+            dir_vec = dir_vec / length
+        else:
             dir_vec = default_axis
-            length = 0.0
         
-        # 본의 회전 계산
-        q = quaternion_from_vectors(default_axis, dir_vec)
-        roll, pitch, yaw = quaternion_to_euler(q)
+        # 2. 기본 축과의 각도 계산
+        dot = np.dot(default_axis, dir_vec)
+        cross = np.cross(default_axis, dir_vec)
+        
+        # 3. 오일러 각도 계산
+        if abs(dot) > 0.999999:
+            roll = 0.0
+            pitch = 0.0
+            yaw = 0.0
+        else:
+            # Roll (Z축 회전)
+            roll = np.arctan2(cross[2], dot) * 180.0 / np.pi
+            
+            # Pitch (X축 회전)
+            pitch = np.arcsin(np.clip(cross[1], -1.0, 1.0)) * 180.0 / np.pi
+            
+            # Yaw (Y축 회전)
+            yaw = -np.arctan2(cross[0], dot) * 180.0 / np.pi
         
         # 본의 스케일
-        scale = [length, 1.0, 1.0] if scale_axis == 'length' else [1.0, 1.0, 1.0]
+        scale = [1.0, 1.0, 1.0]  # 기본 스케일
         
         transforms[bone] = {
             'Location': loc,

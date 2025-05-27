@@ -312,6 +312,7 @@ def app_callback(pad, info, user_data):
                            'foot_r', 'foot_l']:
                     if bone in bone_transforms:
                         transform = bone_transforms[bone]
+                        print(transform)
                         transform_list.append({
                             "Location": transform['Location'],
                             "Rotation": transform['Rotation'].append(1.0),

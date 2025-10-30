@@ -93,11 +93,7 @@ def rotate_to_ground_plane(points_3d: np.ndarray, angle_deg: float = 90.0) -> np
     return (points_3d @ R.T)
 
 
-def _unit(v: np.ndarray) -> np.ndarray:
-    n = float(np.linalg.norm(v))
-    if n < 1e-9:
-        return v
-    return v / n
+ 
 
 
 # 위 Colab 기반 파이프라인만 사용하므로 추가 스케일/카메라 추정 함수는 제거

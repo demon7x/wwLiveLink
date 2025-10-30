@@ -3,7 +3,7 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 import os
 import argparse
-import multiprocessing
+ 
 import numpy as np
 import setproctitle
 import cv2
@@ -19,7 +19,7 @@ from hailo_rpi_common import (
 )
 import socket
 import json
-from scipy.spatial.transform import Rotation as R
+ 
 import livelink_transform
 import atexit
 
@@ -172,209 +172,17 @@ def run_dummy_walk(fps: int = 30, speed_hz: float = 1.2, swing_deg: float = 30.0
     except KeyboardInterrupt:
         return
 
-def map_2d_to_3d(
-    keypoints_2d: np.ndarray,
-    scale: float,
-    floor_angle_deg: float,
-    origin_px: tuple = (0, 0),
-    depth: float = 0.0
-) -> np.ndarray:
-    """
-    COCO 키포인트를 언리얼 엔진 좌표계로 변환
-    - COCO: (0,0)이 좌상단, y축이 아래로
-    - Unreal: (0,0,0)이 중심, y축이 앞으로, z축이 위로
-    """
-    # 이미지 좌표를 중심 기준으로 변환
-    pts = keypoints_2d - np.array(origin_px)
-    
-    # 스케일 적용 및 좌표계 변환
-    x_world = pts[:, 0] * 0.1424  # COCO x -> Unreal x (스케일 조정)
-    y_world = np.zeros_like(x_world)  # COCO y -> Unreal y (전방)
-    z_world = np.zeros_like(x_world)  # COCO z -> Unreal z (높이)
-    
-    return np.stack((x_world, y_world, z_world), axis=1)
+ 
 
-def calculate_bone_rotation(parent_pos, child_pos, target_axis=[1,0,0], is_thigh=False):
-    """
-    부모-자식 본 사이의 회전을 쿼터니언으로 계산합니다.
-    is_thigh: thigh 본인 경우 특별한 회전 처리
-    """
-    v = np.array(child_pos) - np.array(parent_pos)
-    norm = np.linalg.norm(v)
-    if norm < 1e-6:
-        return [0,0,0,1]  # 기본 쿼터니언
-    
-    v_norm = v / norm
-    
-    if is_thigh:
-        # thigh의 경우 언리얼 엔진의 좌표계에 맞게 회전 조정
-        # 기본 방향을 [0, 0, -1]로 설정 (아래쪽 방향)
-        target = np.array([0, 0, -1])
-        
-        # 벡터를 언리얼 엔진의 좌표계로 변환
-        v_norm = np.array([v_norm[0], v_norm[1], -v_norm[2]])
-        
-        # -90도 회전 보정을 위한 추가 쿼터니언
-        correction_angle = -np.pi / 2  # -90도
-        correction_quat = [
-            np.sin(correction_angle/2),  # x
-            0,                           # y
-            0,                           # z
-            np.cos(correction_angle/2)   # w
-        ]
-    else:
-        target = np.array(target_axis)
-        correction_quat = [0, 0, 0, 1]  # 보정 없음
-    
-    # 두 벡터 사이의 회전축과 각도 계산
-    axis = np.cross(v_norm, target)
-    axis_norm = np.linalg.norm(axis)
-    
-    if axis_norm < 1e-6:
-        return [0,0,0,1]  # 벡터가 평행한 경우
-    
-    axis = axis / axis_norm
-    dot = np.clip(np.dot(v_norm, target), -1.0, 1.0)
-    angle = np.arccos(dot)
-    
-    # 쿼터니언 계산
-    half_angle = angle / 2
-    sin_half = np.sin(half_angle)
-    cos_half = np.cos(half_angle)
-    
-    # 기본 회전 쿼터니언
-    base_quat = [axis[0] * sin_half, axis[1] * sin_half, axis[2] * sin_half, cos_half]
-    
-    if is_thigh:
-        # 쿼터니언 곱셈으로 90도 보정 적용
-        q1 = base_quat
-        q2 = correction_quat
-        return [
-            q1[3]*q2[0] + q1[0]*q2[3] + q1[1]*q2[2] - q1[2]*q2[1],  # x
-            q1[3]*q2[1] - q1[0]*q2[2] + q1[1]*q2[3] + q1[2]*q2[0],  # y
-            q1[3]*q2[2] + q1[0]*q2[1] - q1[1]*q2[0] + q1[2]*q2[3],  # z
-            q1[3]*q2[3] - q1[0]*q2[0] - q1[1]*q2[1] - q1[2]*q2[2]   # w
-        ]
-    else:
-        return base_quat
+ 
 
-def detect_floor_angle(points_2d: np.ndarray) -> float:
-    """
-    바닥 각도를 자동으로 감지합니다.
-    """
-    left_hip = points_2d[11]
-    right_hip = points_2d[12]
-    left_ankle = points_2d[15]
-    right_ankle = points_2d[16]
-    hip_mid = (left_hip + right_hip) / 2
-    ankle_mid = (left_ankle + right_ankle) / 2
-    dx = ankle_mid[0] - hip_mid[0]
-    dy = ankle_mid[1] - hip_mid[1]
-    angle_rad = np.arctan2(dy, dx)
-    return np.rad2deg(angle_rad)
+ 
 
-def calculate_scale(points_2d: np.ndarray, real_height_m: float = 1.7) -> float:
-    """
-    실제 키를 기반으로 픽셀-미터 스케일을 계산합니다.
-    """
-    head = points_2d[0]
-    left_ankle = points_2d[15]
-    right_ankle = points_2d[16]
-    ankle_mid = (left_ankle + right_ankle) / 2
-    pixel_height = np.linalg.norm(head - ankle_mid)
-    return real_height_m / pixel_height
+ 
 
-def get_bone_rotations(points_3d):
-    """
-    스켈레톤 구조에 맞는 본 회전을 쿼터니언으로 계산합니다.
-    """
-    rotations = []
-    # 본 계층 구조 정의
-    bone_hierarchy = [
-        ('head', None),          # head는 부모 없음
-        ('upperarm_l', 'head'),  # upperarm_l의 부모는 head
-        ('upperarm_r', 'head'),  # upperarm_r의 부모는 head
-        ('lowerarm_l', 'upperarm_l'),
-        ('lowerarm_r', 'upperarm_r'),
-        ('hand_l', 'lowerarm_l'),
-        ('hand_r', 'lowerarm_r'),
-        ('thigh_l', 'head'),
-        ('thigh_r', 'head'),
-        ('calf_l', 'thigh_l'),
-        ('calf_r', 'thigh_r'),
-        ('foot_l', 'calf_l'),
-        ('foot_r', 'calf_r'),
-    ]
-    
-    # COCO 키포인트 인덱스 매핑
-    keypoint_indices = {
-        'head': 0,           # nose
-        'upperarm_l': 5,     # left_shoulder
-        'upperarm_r': 6,     # right_shoulder
-        'lowerarm_l': 7,     # left_elbow
-        'lowerarm_r': 8,     # right_elbow
-        'hand_l': 9,         # left_wrist
-        'hand_r': 10,        # right_wrist
-        'thigh_l': 11,       # left_hip
-        'thigh_r': 12,       # right_hip
-        'calf_l': 13,        # left_knee
-        'calf_r': 14,        # right_knee
-        'foot_l': 15,        # left_ankle
-        'foot_r': 16,        # right_ankle
-    }
-    
-    # 각 본의 회전 계산
-    for bone_name, parent_name in bone_hierarchy:
-        if parent_name is None:
-            # head는 기본 회전
-            rotations.append([0,0,0,1])
-        else:
-            # 부모-자식 본 사이의 회전 계산
-            parent_idx = keypoint_indices[parent_name]
-            child_idx = keypoint_indices[bone_name]
-            if parent_idx < len(points_3d) and child_idx < len(points_3d):
-                # thigh 본인 경우 특별한 회전 처리
-                is_thigh = bone_name in ['thigh_l', 'thigh_r']
-                rot = calculate_bone_rotation(points_3d[parent_idx], points_3d[child_idx], is_thigh=is_thigh)
-                rotations.append(rot)
-            else:
-                rotations.append([0,0,0,1])
-    
-    return rotations
+ 
 
-def get_bone_positions(points_3d):
-    """
-    스켈레톤 구조에 맞는 본 위치를 계산합니다.
-    """
-    positions = []
-    # COCO 키포인트 인덱스 매핑
-    keypoint_indices = {
-        'head': 0,           # nose
-        'upperarm_l': 5,     # left_shoulder
-        'upperarm_r': 6,     # right_shoulder
-        'lowerarm_l': 7,     # left_elbow
-        'lowerarm_r': 8,     # right_elbow
-        'hand_l': 9,         # left_wrist
-        'hand_r': 10,        # right_wrist
-        'thigh_l': 11,       # left_hip
-        'thigh_r': 12,       # right_hip
-        'calf_l': 13,        # left_knee
-        'calf_r': 14,        # right_knee
-        'foot_l': 15,        # left_ankle
-        'foot_r': 16,        # right_ankle
-    }
-    
-    # 각 본의 위치 추출
-    for bone_name in ['head', 'upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r',
-                     'hand_l', 'hand_r', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r',
-                     'foot_l', 'foot_r']:
-        idx = keypoint_indices[bone_name]
-        if idx < len(points_3d):
-            positions.append(points_3d[idx].tolist())
-        else:
-            positions.append([0,0,0])
-    
-    return positions
+ 
 
 # -----------------------------------------------------------------------------------------------
 # User-defined class to be used in the callback function

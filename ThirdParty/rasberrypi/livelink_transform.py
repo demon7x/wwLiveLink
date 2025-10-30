@@ -46,6 +46,53 @@ BONE_ORDER = [
 ]
 
 
+def normalize_keypoints_2d_yolov8(points_2d: np.ndarray, frame_width: int, frame_height: int, person_height_m: float = 1.65) -> np.ndarray:
+    """
+    YOLOv8 (17,2) 키포인트를 Sports2D 스타일 3D로 정규화 (단일 프레임)
+    - 입력: points_2d (17,2) 혹은 (17,>=2)
+    - 출력: (17,3) [X,Y,Z] (미터 단위, Z=0)
+    """
+    if points_2d.shape[0] < 13:
+        # 관절 수 부족 시 영벡터 반환
+        return np.zeros((17, 3), dtype=float)
+
+    # 좌/우 엉덩이 거리 기반 스케일(Colab 예시 로직을 그대로 따름)
+    l_hip = points_2d[11][:2]
+    r_hip = points_2d[12][:2]
+    hip_width_px = float(np.linalg.norm(l_hip - r_hip))
+    if hip_width_px < 10.0:
+        # 너무 짧으면 실패로 간주하고 영벡터 반환
+        return np.zeros((17, 3), dtype=float)
+
+    scale = float(person_height_m) / (hip_width_px * 2.5)
+
+    out = np.zeros((17, 3), dtype=float)
+    cx = frame_width / 2.0
+    cy = frame_height / 2.0
+    for i in range(min(17, points_2d.shape[0])):
+        x_px = float(points_2d[i, 0])
+        y_px = float(points_2d[i, 1])
+        x_norm = (x_px - cx) / frame_width
+        y_norm = (y_px - cy) / frame_height
+        x_m = x_norm * frame_width * scale
+        y_m = -y_norm * frame_height * scale  # 위로 갈수록 +Y
+        out[i] = [x_m, y_m, 0.0]
+    return out
+
+
+def rotate_to_ground_plane(points_3d: np.ndarray, angle_deg: float = 90.0) -> np.ndarray:
+    """
+    X축 기준으로 angle_deg만큼 회전시켜 지면 정렬 (Colab 예시와 동일)
+    - 입력: (17,3)
+    - 출력: (17,3)
+    """
+    angle_rad = np.deg2rad(float(angle_deg))
+    R = np.array([[1.0, 0.0, 0.0],
+                  [0.0, np.cos(angle_rad), -np.sin(angle_rad)],
+                  [0.0, np.sin(angle_rad),  np.cos(angle_rad)]], dtype=float)
+    return (points_3d @ R.T)
+
+
 def _unit(v: np.ndarray) -> np.ndarray:
     n = float(np.linalg.norm(v))
     if n < 1e-9:
@@ -53,112 +100,13 @@ def _unit(v: np.ndarray) -> np.ndarray:
     return v / n
 
 
-def _backproject_ray(u: float, v: float, fx: float, fy: float, cx: float, cy: float) -> np.ndarray:
-    x = (u - cx) / fx
-    y = (v - cy) / fy
-    d = np.array([x, y, 1.0], dtype=np.float32)
-    return _unit(d)
+# 위 Colab 기반 파이프라인만 사용하므로 추가 스케일/카메라 추정 함수는 제거
 
 
-def _transform_to_ue(P: np.ndarray) -> np.ndarray:
-    """
-    Camera(OpenCV: +X right, +Y down, +Z forward) → UE(+X forward, +Y right, +Z up)
-    """
-    M = np.array([[0, 0, 1],
-                  [1, 0, 0],
-                  [0,-1, 0]], dtype=np.float32)
-    return (M @ P.T).T
+# 바닥 각도 추정 등 추가 보정은 현재 사용하지 않음
 
 
-def _estimate_scale_m_per_px(kps2d: np.ndarray, *, height_m: float | None = None) -> float:
-    """
-    Rough m/px from shoulder/hip/neck-pelvis heuristics. If height_m provided,
-    scale so that head→ankle_mid pixel distance matches height_m.
-    """
-    def pix_dist(i: int, j: int) -> float:
-        ui,vi = kps2d[i]
-        uj,vj = kps2d[j]
-        return float(np.hypot(ui-uj, vi-vj) + 1e-6)
-
-    l_sh, r_sh = COCO["left_shoulder"], COCO["right_shoulder"]
-    l_hip, r_hip = COCO["left_hip"], COCO["right_hip"]
-
-    neck_uv = 0.5 * (kps2d[l_sh,:2] + kps2d[r_sh,:2])
-    pelvis_uv = 0.5 * (kps2d[l_hip,:2] + kps2d[r_hip,:2])
-    neck_pelvis_px = float(np.hypot(*(neck_uv - pelvis_uv)))
-
-    pairs = []
-    # Typical adult metrics (meters) — tune for your dataset
-    spine_len_m = 0.45  # pelvis->neck
-    shoulder_width_m = 0.36
-    hip_width_m = 0.30
-    if neck_pelvis_px > 2.0:
-        pairs.append((neck_pelvis_px, spine_len_m))
-    shoulder_px = pix_dist(l_sh, r_sh)
-    if shoulder_px > 2.0:
-        pairs.append((shoulder_px, shoulder_width_m))
-    hip_px = pix_dist(l_hip, r_hip)
-    if hip_px > 2.0:
-        pairs.append((hip_px, hip_width_m))
-
-    # Height-based scale if requested
-    if height_m is not None and height_m > 0:
-        nose = COCO["nose"]; l_ank = COCO["left_ankle"]; r_ank = COCO["right_ankle"]
-        ankle_mid = 0.5 * (kps2d[l_ank,:2] + kps2d[r_ank,:2])
-        h_px = float(np.hypot(*(kps2d[nose,:2] - ankle_mid)))
-        if h_px > 2.0:
-            return float(height_m) / h_px
-
-    ratios = [px / m for (px, m) in pairs if m > 1e-6]
-    if not ratios:
-        return 0.002  # 1px≈2mm fallback
-    px_per_m = float(np.median(ratios))
-    return 1.0 / max(px_per_m, 1e-6)
-
-
-def _detect_floor_angle(points_2d: np.ndarray) -> float:
-    """Estimate floor angle (radians) from ankle line orientation."""
-    l_ank = COCO["left_ankle"]; r_ank = COCO["right_ankle"]
-    v = points_2d[r_ank,:2] - points_2d[l_ank,:2]
-    return float(np.arctan2(v[1], v[0])) if np.linalg.norm(v) > 1e-6 else 0.0
-
-
-def map_2d_to_3d(points_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, init_z_m: float = 2.5, height_m: float | None = None, floor_angle_deg: float | None = None, direction: str = 'side') -> np.ndarray:
-    """
-    Two modes:
-      - If K (fx,fy,cx,cy) provided: lift pixel rays to 3D at nominal depth (camera model), transform to UE.
-      - Else: Sports2D-style planar mapping: rotate by floor angle, convert px→meters, map to UE plane (Y=0).
-    Returns (N,3) UE-space points.
-    """
-    if K is not None:
-        fx, fy, cx, cy = K
-        rays = np.stack([
-            _backproject_ray(float(u), float(v), fx, fy, cx, cy) for (u, v) in points_2d
-        ], axis=0)
-        pts3d_cam = rays * float(init_z_m)
-        pts3d_ue = _transform_to_ue(pts3d_cam)
-        m_per_px = _estimate_scale_m_per_px(points_2d, height_m=height_m)
-        pts3d_ue[:, 0] *= float(m_per_px)
-        pts3d_ue[:, 1] *= float(m_per_px)
-        return pts3d_ue
-
-    # Sports2D-style planar mapping
-    origin_px = np.array([width/2.0, height/2.0], dtype=np.float32)
-    pts = points_2d[:, :2] - origin_px
-    floor_angle = np.deg2rad(float(floor_angle_deg)) if floor_angle_deg is not None else _detect_floor_angle(points_2d)
-    c, s = np.cos(-floor_angle), np.sin(-floor_angle)  # rotate to align floor horizontally
-    R2 = np.array([[c,-s],[s,c]], dtype=np.float32)
-    pr = (R2 @ pts.T).T  # rotated pixels
-    m_per_px = _estimate_scale_m_per_px(points_2d, height_m=height_m)
-    x = pr[:, 0] * float(m_per_px)
-    z = -pr[:, 1] * float(m_per_px)  # pixel down -> Z up
-    # Directional normative depth (very small offset) to help UE orientation if needed
-    if direction in ('front', 'back'):
-        sign = 1.0 if direction == 'front' else -1.0
-        y = np.full_like(x, 0.0) + 0.02 * sign
-    else:
-        y = np.zeros_like(x)
-    return np.stack((x, y, z), axis=1)
+# 기존 map_2d_to_3d는 사용하지 않음 (Colab 스타일 고정 파이프라인 사용)
 
 
 def _quat_from_axis_angle(axis: np.ndarray, angle: float) -> list:
@@ -208,55 +156,22 @@ def calculate_bone_rotation(parent_pos: np.ndarray, child_pos: np.ndarray, *, is
     return base_q
 
 
-def get_bone_positions(points_3d: np.ndarray) -> list:
-    positions = []
-    for bone in BONE_ORDER:
-        idx = KEYPOINT_INDICES[bone]
-        if idx < len(points_3d):
-            positions.append(points_3d[idx].tolist())
-        else:
-            positions.append([0.0, 0.0, 0.0])
-    return positions
+# 위치 리스트 반환 함수는 사용하지 않음
 
 
-def get_bone_rotations(points_3d: np.ndarray) -> list:
-    # Define simple hierarchy mapping for parent of each bone by name
-    parents = {
-        'head': None,
-        'upperarm_l': 'head',
-        'upperarm_r': 'head',
-        'lowerarm_l': 'upperarm_l',
-        'lowerarm_r': 'upperarm_r',
-        'hand_l': 'lowerarm_l',
-        'hand_r': 'lowerarm_r',
-        'thigh_l': 'head',
-        'thigh_r': 'head',
-        'calf_l': 'thigh_l',
-        'calf_r': 'thigh_r',
-        'foot_l': 'calf_l',
-        'foot_r': 'calf_r',
-    }
-
-    rotations = []
-    for bone in BONE_ORDER:
-        parent = parents[bone]
-        if parent is None:
-            rotations.append([0.0, 0.0, 0.0, 1.0])
-            continue
-        c_idx = KEYPOINT_INDICES[bone]
-        p_idx = KEYPOINT_INDICES[parent]
-        if c_idx < len(points_3d) and p_idx < len(points_3d):
-            rotations.append(
-                calculate_bone_rotation(points_3d[p_idx], points_3d[c_idx], is_thigh=(bone in ['thigh_l', 'thigh_r']))
-            )
-        else:
-            rotations.append([0.0, 0.0, 0.0, 1.0])
-    return rotations
+# 회전 리스트 단독 반환 함수는 사용하지 않음 (compute_transforms에서 직접 계산)
 
 
 def compute_points3d(keypoints_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, height_m: float | None = None, floor_angle_deg: float | None = None, direction: str = 'side') -> np.ndarray:
-    """Expose 3D point computation for TRC export/diagnostics."""
-    return map_2d_to_3d(keypoints_2d, width, height, K=K, height_m=height_m, floor_angle_deg=floor_angle_deg, direction=direction)
+    """
+    Colab(sport2d) 스타일 변환:
+      1) normalize_keypoints_2d_yolov8(points_2d, width, height)
+      2) rotate_to_ground_plane(..., angle=90deg)
+    반환: (17,3)
+    """
+    pts3d = normalize_keypoints_2d_yolov8(keypoints_2d, width, height, person_height_m=1.65)
+    pts3d = rotate_to_ground_plane(pts3d, angle_deg=90.0)
+    return pts3d
 
 
 class TRCWriter:
@@ -334,13 +249,11 @@ class TRCWriter:
 
 def compute_transforms(keypoints_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, height_m: float | None = None, floor_angle_deg: float | None = None, direction: str = 'side') -> list:
     """
-    Build LOCAL bone transforms suitable for Live Link:
-      - Root (head) Location = [0,0,0], Rotation = identity
-      - Each child bone Location = [length,0,0] where length = |child-parent|
-      - Rotation aligns +X with (child-parent)
+    Colab(sport2d) 스타일 3D 포인트로부터 Live Link 로컬 본 트랜스폼 생성:
+      - 루트(head) Location=[0,0,0], Rotation=identity
+      - 자식 본 Location=[length,0,0], Rotation=+X를 (child-parent) 방향으로 정렬
     """
-    # 3D points in UE space (approximate)
-    points_3d = map_2d_to_3d(keypoints_2d, width, height, K=K, height_m=height_m, floor_angle_deg=floor_angle_deg, direction=direction)
+    points_3d = compute_points3d(keypoints_2d, width, height)
 
     parents = {
         'head': None,

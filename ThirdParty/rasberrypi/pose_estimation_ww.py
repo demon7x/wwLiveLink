@@ -20,6 +20,7 @@ from hailo_rpi_common import (
 import socket
 import json
 from scipy.spatial.transform import Rotation as R
+import livelink_transform
 
 # UDP 설정 (필요시 수정)
 UDP_IP = "192.168.0.255"  # 브로드캐스트 주소
@@ -319,26 +320,13 @@ def app_callback(pad, info, user_data):
                     send_skeleton_structure()
                     skeleton_sent = True
                 
-                # 3D 좌표로 변환
-                points_3d = map_2d_to_3d(
+                # 외부 모듈로 3D 보정 및 Live Link 변환 수행
+                bone_transforms = livelink_transform.compute_transforms(
                     keypoints_2d=points_2d,
-                    scale=0.1424,  # 스프레드시트 예시와 동일한 스케일의 8배
-                    floor_angle_deg=0.0,
-                    origin_px=(width/2, height/2)
+                    width=width,
+                    height=height,
+                    scale=0.1424,
                 )
-                
-                # 본 회전과 위치 계산
-                bone_rotations = get_bone_rotations(points_3d)
-                bone_positions = get_bone_positions(points_3d)
-                
-                # 본 트랜스폼 생성
-                bone_transforms = []
-                for i in range(13):  # 13개의 본
-                    bone_transforms.append({
-                        "Location": bone_positions[i],
-                        "Rotation": bone_rotations[i],
-                        "Scale": [1,1,1]
-                    })
                 
                 send_frame_animation(bone_transforms)
                 

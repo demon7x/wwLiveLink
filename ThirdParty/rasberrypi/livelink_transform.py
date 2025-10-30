@@ -62,9 +62,10 @@ def _transform_to_ue(P: np.ndarray) -> np.ndarray:
     return (M @ P.T).T
 
 
-def _estimate_scale_m_per_px(kps2d: np.ndarray) -> float:
+def _estimate_scale_m_per_px(kps2d: np.ndarray, *, height_m: float | None = None) -> float:
     """
-    Rough m/px from shoulder/hip/neck-pelvis heuristics. Fallback to small value.
+    Rough m/px from shoulder/hip/neck-pelvis heuristics. If height_m provided,
+    scale so that head→ankle_mid pixel distance matches height_m.
     """
     def pix_dist(i: int, j: int) -> float:
         ui,vi = kps2d[i]
@@ -92,6 +93,14 @@ def _estimate_scale_m_per_px(kps2d: np.ndarray) -> float:
     if hip_px > 2.0:
         pairs.append((hip_px, hip_width_m))
 
+    # Height-based scale if requested
+    if height_m is not None and height_m > 0:
+        nose = COCO["nose"]; l_ank = COCO["left_ankle"]; r_ank = COCO["right_ankle"]
+        ankle_mid = 0.5 * (kps2d[l_ank,:2] + kps2d[r_ank,:2])
+        h_px = float(np.hypot(*(kps2d[nose,:2] - ankle_mid)))
+        if h_px > 2.0:
+            return float(height_m) / h_px
+
     ratios = [px / m for (px, m) in pairs if m > 1e-6]
     if not ratios:
         return 0.002  # 1px≈2mm fallback
@@ -99,30 +108,44 @@ def _estimate_scale_m_per_px(kps2d: np.ndarray) -> float:
     return 1.0 / max(px_per_m, 1e-6)
 
 
-def map_2d_to_3d(points_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, init_z_m: float = 2.5) -> np.ndarray:
+def _detect_floor_angle(points_2d: np.ndarray) -> float:
+    """Estimate floor angle (radians) from ankle line orientation."""
+    l_ank = COCO["left_ankle"]; r_ank = COCO["right_ankle"]
+    v = points_2d[r_ank,:2] - points_2d[l_ank,:2]
+    return float(np.arctan2(v[1], v[0])) if np.linalg.norm(v) > 1e-6 else 0.0
+
+
+def map_2d_to_3d(points_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, init_z_m: float = 2.5, height_m: float | None = None) -> np.ndarray:
     """
-    Lift 2D (pixels) into 3D rays using intrinsics, place at a nominal depth, then convert to UE coords
-    and scale XY by estimated meters-per-pixel to get consistent local units.
-    Returns array shape (17,3) in UE coordinates.
+    Two modes:
+      - If K (fx,fy,cx,cy) provided: lift pixel rays to 3D at nominal depth (camera model), transform to UE.
+      - Else: Sports2D-style planar mapping: rotate by floor angle, convert px→meters, map to UE plane (Y=0).
+    Returns (N,3) UE-space points.
     """
-    if K is None:
-        fx = fy = float(max(width, height) * 1.6)
-        cx, cy = width / 2.0, height / 2.0
-    else:
+    if K is not None:
         fx, fy, cx, cy = K
+        rays = np.stack([
+            _backproject_ray(float(u), float(v), fx, fy, cx, cy) for (u, v) in points_2d
+        ], axis=0)
+        pts3d_cam = rays * float(init_z_m)
+        pts3d_ue = _transform_to_ue(pts3d_cam)
+        m_per_px = _estimate_scale_m_per_px(points_2d, height_m=height_m)
+        pts3d_ue[:, 0] *= float(m_per_px)
+        pts3d_ue[:, 1] *= float(m_per_px)
+        return pts3d_ue
 
-    rays = np.stack([
-        _backproject_ray(float(u), float(v), fx, fy, cx, cy) for (u, v) in points_2d
-    ], axis=0)  # (17,3)
-    pts3d_cam = rays * float(init_z_m)
-    pts3d_ue = _transform_to_ue(pts3d_cam)
-
-    # Estimate scale (m/px) from 2D; apply to X/Y (forward/right in UE)
-    m_per_px = _estimate_scale_m_per_px(points_2d)
-    pts3d_ue[:, 0] *= float(m_per_px)  # X
-    pts3d_ue[:, 1] *= float(m_per_px)  # Y
-    # Z already in meters via init_z_m; keep as-is
-    return pts3d_ue
+    # Sports2D-style planar mapping
+    origin_px = np.array([width/2.0, height/2.0], dtype=np.float32)
+    pts = points_2d[:, :2] - origin_px
+    floor_angle = _detect_floor_angle(points_2d)
+    c, s = np.cos(-floor_angle), np.sin(-floor_angle)  # rotate to align floor horizontally
+    R2 = np.array([[c,-s],[s,c]], dtype=np.float32)
+    pr = (R2 @ pts.T).T  # rotated pixels
+    m_per_px = _estimate_scale_m_per_px(points_2d, height_m=height_m)
+    x = pr[:, 0] * float(m_per_px)
+    z = -pr[:, 1] * float(m_per_px)  # pixel down -> Z up
+    y = np.zeros_like(x)
+    return np.stack((x, y, z), axis=1)
 
 
 def _quat_from_axis_angle(axis: np.ndarray, angle: float) -> list:

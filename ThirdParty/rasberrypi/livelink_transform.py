@@ -115,7 +115,7 @@ def _detect_floor_angle(points_2d: np.ndarray) -> float:
     return float(np.arctan2(v[1], v[0])) if np.linalg.norm(v) > 1e-6 else 0.0
 
 
-def map_2d_to_3d(points_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, init_z_m: float = 2.5, height_m: float | None = None) -> np.ndarray:
+def map_2d_to_3d(points_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, init_z_m: float = 2.5, height_m: float | None = None, floor_angle_deg: float | None = None, direction: str = 'side') -> np.ndarray:
     """
     Two modes:
       - If K (fx,fy,cx,cy) provided: lift pixel rays to 3D at nominal depth (camera model), transform to UE.
@@ -137,14 +137,19 @@ def map_2d_to_3d(points_2d: np.ndarray, width: int, height: int, *, K: tuple | N
     # Sports2D-style planar mapping
     origin_px = np.array([width/2.0, height/2.0], dtype=np.float32)
     pts = points_2d[:, :2] - origin_px
-    floor_angle = _detect_floor_angle(points_2d)
+    floor_angle = np.deg2rad(float(floor_angle_deg)) if floor_angle_deg is not None else _detect_floor_angle(points_2d)
     c, s = np.cos(-floor_angle), np.sin(-floor_angle)  # rotate to align floor horizontally
     R2 = np.array([[c,-s],[s,c]], dtype=np.float32)
     pr = (R2 @ pts.T).T  # rotated pixels
     m_per_px = _estimate_scale_m_per_px(points_2d, height_m=height_m)
     x = pr[:, 0] * float(m_per_px)
     z = -pr[:, 1] * float(m_per_px)  # pixel down -> Z up
-    y = np.zeros_like(x)
+    # Directional normative depth (very small offset) to help UE orientation if needed
+    if direction in ('front', 'back'):
+        sign = 1.0 if direction == 'front' else -1.0
+        y = np.full_like(x, 0.0) + 0.02 * sign
+    else:
+        y = np.zeros_like(x)
     return np.stack((x, y, z), axis=1)
 
 
@@ -241,7 +246,7 @@ def get_bone_rotations(points_3d: np.ndarray) -> list:
     return rotations
 
 
-def compute_transforms(keypoints_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None) -> list:
+def compute_transforms(keypoints_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, height_m: float | None = None, floor_angle_deg: float | None = None, direction: str = 'side') -> list:
     """
     Build LOCAL bone transforms suitable for Live Link:
       - Root (head) Location = [0,0,0], Rotation = identity
@@ -249,7 +254,7 @@ def compute_transforms(keypoints_2d: np.ndarray, width: int, height: int, *, K: 
       - Rotation aligns +X with (child-parent)
     """
     # 3D points in UE space (approximate)
-    points_3d = map_2d_to_3d(keypoints_2d, width, height, K=K)
+    points_3d = map_2d_to_3d(keypoints_2d, width, height, K=K, height_m=height_m, floor_angle_deg=floor_angle_deg, direction=direction)
 
     parents = {
         'head': None,

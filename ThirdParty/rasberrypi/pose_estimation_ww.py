@@ -408,6 +408,9 @@ def app_callback(pad, info, user_data):
                     keypoints_2d=points_2d,
                     width=width,
                     height=height,
+                    height_m=getattr(args, 's2d_height', None),
+                    floor_angle_deg=getattr(args, 's2d_floor', None),
+                    direction=getattr(args, 's2d_direction', 'side'),
                 )
                 
                 send_frame_animation(bone_transforms)
@@ -492,6 +495,10 @@ if __name__ == "__main__":
     parser.add_argument('--dummy-fps', type=int, default=30, help='Dummy walk FPS')
     parser.add_argument('--dummy-speed', type=float, default=1.2, help='Dummy walk speed in cycles/sec')
     parser.add_argument('--dummy-swing', type=float, default=30.0, help='Arm swing amplitude in degrees')
+    # Sports2D-style options
+    parser.add_argument('--s2d-height', type=float, default=None, help='Subject height in meters for scale (Sports2D-like)')
+    parser.add_argument('--s2d-floor', type=float, default=None, help='Floor angle in degrees (override auto)')
+    parser.add_argument('--s2d-direction', type=str, default='side', choices=['side','front','back'], help='Camera view relative to subject')
     args = parser.parse_args()
     if getattr(args, 'dummy_walk', False):
         run_dummy_walk(fps=args.dummy_fps, speed_hz=args.dummy_speed, swing_deg=args.dummy_swing)

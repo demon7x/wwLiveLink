@@ -515,7 +515,7 @@ if __name__ == "__main__":
     parser.add_argument('--s2d-floor', type=float, default=None, help='Floor angle in degrees (override auto)')
     parser.add_argument('--s2d-direction', type=str, default='side', choices=['side','front','back'], help='Camera view relative to subject')
     # TRC export options
-    parser.add_argument('--save-trc', type=str, default=None, help='Path to save streaming TRC of mapped 3D COCO points')
+    parser.add_argument('--save-trc', nargs='?', const='@output.trc', default=None, help='Path to save streaming TRC of mapped 3D COCO points (default @output.trc if no path)')
     parser.add_argument('--trc-rate', type=float, default=30.0, help='TRC DataRate (Hz)')
     args = parser.parse_args()
     # init TRC writer if requested

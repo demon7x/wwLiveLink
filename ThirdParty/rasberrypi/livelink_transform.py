@@ -270,7 +270,9 @@ class TRCWriter:
         self.data_rate = float(data_rate)
         self.units = units
         self.frame_index = 0
-        self._scale_out = 1000.0 if self.units.lower() == 'mm' else 1.0
+        # Match reference output scaling: write raw meters even if header says 'mm'
+        # (User's reference file uses 'mm' in header but values are ~meters.)
+        self._scale_out = 1.0
         self._ensure_header()
 
     def _ensure_header(self):
@@ -280,7 +282,9 @@ class TRCWriter:
             fname = self.filepath.split('/')[-1]
             f.write(f"PathFileType\t4\t(X/Y/Z)\t{fname}\n")
             f.write("DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStartFrame\tOrigNumFrames\n")
-            f.write(f"{self.data_rate:.2f}\t{self.data_rate:.2f}\t0\t{len(self.marker_names)}\t{self.units}\t{self.data_rate:.2f}\t1\t0\n")
+            # Use integer formatting to mirror the reference TRC header style
+            rate_i = int(round(self.data_rate))
+            f.write(f"{rate_i}\t{rate_i}\t0\t{len(self.marker_names)}\t{self.units}\t{rate_i}\t1\t0\n")
             # Columns
             f.write("Frame#\tTime\t" + "\t".join([f"{n}\t\t" for n in self.marker_names]).rstrip('\t') + "\n")
             # Sub-columns X Y Z for each marker

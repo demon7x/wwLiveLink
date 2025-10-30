@@ -96,6 +96,16 @@ def _xrot_quat(deg: float):
     c = np.cos(rad/2.0)
     return [float(s), 0.0, 0.0, float(c)]
 
+def _mul_quat(q1, q2):
+    x1, y1, z1, w1 = q1
+    x2, y2, z2, w2 = q2
+    return [
+        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+    ]
+
 
 def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     # Phases (left/right out of phase)
@@ -134,8 +144,10 @@ def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     transforms.append({"Location":[BONE_LENGTH['hand_l'],0,0], "Rotation": _zrot_quat(+wrist), "Scale":[1,1,1]})            # hand_l
     transforms.append({"Location":[BONE_LENGTH['hand_r'],0,0], "Rotation": _zrot_quat(-wrist), "Scale":[1,1,1]})            # hand_r
     # Legs: use local +X offsets, rotate around X for flexion/extension
-    transforms.append({"Location":[BONE_LENGTH['thigh_l'],0,0], "Rotation": _xrot_quat(+thigh_l), "Scale":[1,1,1]})         # thigh_l
-    transforms.append({"Location":[BONE_LENGTH['thigh_r'],0,0], "Rotation": _xrot_quat(+thigh_r), "Scale":[1,1,1]})         # thigh_r
+    rot_thigh_l = _mul_quat(_zrot_quat(180.0), _xrot_quat(+thigh_l))
+    rot_thigh_r = _mul_quat(_zrot_quat(180.0), _xrot_quat(+thigh_r))
+    transforms.append({"Location":[BONE_LENGTH['thigh_l'],0,0], "Rotation": rot_thigh_l, "Scale":[1,1,1]})                  # thigh_l
+    transforms.append({"Location":[BONE_LENGTH['thigh_r'],0,0], "Rotation": rot_thigh_r, "Scale":[1,1,1]})                  # thigh_r
     transforms.append({"Location":[BONE_LENGTH['calf_l'],0,0], "Rotation": _xrot_quat(+knee_l), "Scale":[1,1,1]})           # calf_l
     transforms.append({"Location":[BONE_LENGTH['calf_r'],0,0], "Rotation": _xrot_quat(+knee_r), "Scale":[1,1,1]})           # calf_r
     transforms.append({"Location":[BONE_LENGTH['foot_l'],0,0], "Rotation": _xrot_quat(+ankle), "Scale":[1,1,1]})            # foot_l

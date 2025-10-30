@@ -108,17 +108,9 @@ def _mul_quat(q1, q2):
 
 
 def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
-    # Phases (left/right out of phase)
+    # 단순 테스트: thigh_l만 Z축으로 -20~+20도 왕복 회전
     phase = 2.0 * np.pi * t
-    arm = swing_deg * np.sin(phase)
-    arm_lo = 0.6 * swing_deg * np.sin(phase)
-    wrist = 0.2 * swing_deg * np.sin(phase)
-    # Legs: left/right opposite
-    thigh_l = 30.0 * np.sin(phase)
-    thigh_r = -30.0 * np.sin(phase)
-    knee_l = 45.0 * max(0.0, -np.sin(phase))
-    knee_r = 45.0 * max(0.0,  np.sin(phase))
-    ankle = 8.0 * np.sin(phase)
+    thigh_l_z = 20.0 * np.sin(phase)
 
     # Nominal bone lengths (units) so bones don't collapse at root
     BONE_LENGTH = {
@@ -132,26 +124,22 @@ def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     }
 
     transforms = []
-    # Order must match skeleton: head, upperarm_l, upperarm_r, lowerarm_l, lowerarm_r,
+    # 본 순서 고정: head, upperarm_l, upperarm_r, lowerarm_l, lowerarm_r,
     # hand_l, hand_r, thigh_l, thigh_r, calf_l, calf_r, foot_l, foot_r
-    # Root(head)
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})
-    # Arms: use local +X offsets for all, rotate around Z for side swing
-    transforms.append({"Location":[BONE_LENGTH['upperarm_l'],0,0], "Rotation": _zrot_quat(+arm), "Scale":[1,1,1]})          # upperarm_l
-    transforms.append({"Location":[BONE_LENGTH['upperarm_r'],0,0], "Rotation": _zrot_quat(-arm), "Scale":[1,1,1]})          # upperarm_r
-    transforms.append({"Location":[BONE_LENGTH['lowerarm_l'],0,0], "Rotation": _zrot_quat(+arm_lo), "Scale":[1,1,1]})       # lowerarm_l
-    transforms.append({"Location":[BONE_LENGTH['lowerarm_r'],0,0], "Rotation": _zrot_quat(-arm_lo), "Scale":[1,1,1]})       # lowerarm_r
-    transforms.append({"Location":[BONE_LENGTH['hand_l'],0,0], "Rotation": _zrot_quat(+wrist), "Scale":[1,1,1]})            # hand_l
-    transforms.append({"Location":[BONE_LENGTH['hand_r'],0,0], "Rotation": _zrot_quat(-wrist), "Scale":[1,1,1]})            # hand_r
-    # Legs: use local +X offsets, rotate around X for flexion/extension
-    rot_thigh_l = _mul_quat(_zrot_quat(180.0), _xrot_quat(+thigh_l))
-    rot_thigh_r = _mul_quat(_zrot_quat(180.0), _xrot_quat(+thigh_r))
-    transforms.append({"Location":[BONE_LENGTH['thigh_l'],0,0], "Rotation": rot_thigh_l, "Scale":[1,1,1]})                  # thigh_l
-    transforms.append({"Location":[BONE_LENGTH['thigh_r'],0,0], "Rotation": rot_thigh_r, "Scale":[1,1,1]})                  # thigh_r
-    transforms.append({"Location":[BONE_LENGTH['calf_l'],0,0], "Rotation": _xrot_quat(+knee_l), "Scale":[1,1,1]})           # calf_l
-    transforms.append({"Location":[BONE_LENGTH['calf_r'],0,0], "Rotation": _xrot_quat(+knee_r), "Scale":[1,1,1]})           # calf_r
-    transforms.append({"Location":[BONE_LENGTH['foot_l'],0,0], "Rotation": _xrot_quat(+ankle), "Scale":[1,1,1]})            # foot_l
-    transforms.append({"Location":[BONE_LENGTH['foot_r'],0,0], "Rotation": _xrot_quat(-ankle), "Scale":[1,1,1]})            # foot_r
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})                                    # head
+    transforms.append({"Location":[BONE_LENGTH['upperarm_l'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})            # upperarm_l
+    transforms.append({"Location":[BONE_LENGTH['upperarm_r'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})            # upperarm_r
+    transforms.append({"Location":[BONE_LENGTH['lowerarm_l'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})            # lowerarm_l
+    transforms.append({"Location":[BONE_LENGTH['lowerarm_r'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})            # lowerarm_r
+    transforms.append({"Location":[BONE_LENGTH['hand_l'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})               # hand_l
+    transforms.append({"Location":[BONE_LENGTH['hand_r'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})               # hand_r
+    # Only thigh_l rotates about Z in -20~+20 degrees
+    transforms.append({"Location":[BONE_LENGTH['thigh_l'],0,0], "Rotation": _zrot_quat(thigh_l_z), "Scale":[1,1,1]})        # thigh_l
+    transforms.append({"Location":[BONE_LENGTH['thigh_r'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})              # thigh_r
+    transforms.append({"Location":[BONE_LENGTH['calf_l'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})               # calf_l
+    transforms.append({"Location":[BONE_LENGTH['calf_r'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})               # calf_r
+    transforms.append({"Location":[BONE_LENGTH['foot_l'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})               # foot_l
+    transforms.append({"Location":[BONE_LENGTH['foot_r'],0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})               # foot_r
     return transforms
 
 

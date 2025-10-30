@@ -71,6 +71,64 @@ def send_frame_animation(bone_transforms):
     sock.sendto(msg, (UDP_IP, UDP_PORT))
     log_udp_message(msg)
 
+
+# ------------------------------------------------------------
+# Dummy walk generator (Live Link-like bone transforms)
+# ------------------------------------------------------------
+def _zrot_quat(deg: float):
+    rad = float(np.deg2rad(deg))
+    s = np.sin(rad/2.0)
+    c = np.cos(rad/2.0)
+    return [0.0, 0.0, float(s), float(c)]
+
+
+def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
+    # Phases
+    phase = 2.0 * np.pi * t
+    arm = swing_deg * np.sin(phase)
+    arm_lo = 0.6 * swing_deg * np.sin(phase + np.pi/8.0)
+    leg = 35.0 * np.sin(phase)
+    knee_l = 40.0 * max(0.0, -np.sin(phase))
+    knee_r = 40.0 * max(0.0,  np.sin(phase))
+    ankle = 5.0 * np.sin(phase + np.pi/4.0)
+
+    transforms = []
+    # Order must match skeleton: head, upperarm_l, upperarm_r, lowerarm_l, lowerarm_r,
+    # hand_l, hand_r, thigh_l, thigh_r, calf_l, calf_r, foot_l, foot_r
+    # Location kept at zero; Rotation is quaternion [x,y,z,w]
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})                # head
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+arm), "Scale":[1,1,1]})               # upperarm_l
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-arm), "Scale":[1,1,1]})               # upperarm_r
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+arm_lo), "Scale":[1,1,1]})            # lowerarm_l
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-arm_lo), "Scale":[1,1,1]})            # lowerarm_r
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.2*arm_lo), "Scale":[1,1,1]})         # hand_l
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-0.2*arm_lo), "Scale":[1,1,1]})        # hand_r
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-leg), "Scale":[1,1,1]})               # thigh_l (opposite)
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+leg), "Scale":[1,1,1]})               # thigh_r
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+knee_l), "Scale":[1,1,1]})            # calf_l
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+knee_r), "Scale":[1,1,1]})            # calf_r
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+ankle), "Scale":[1,1,1]})            # foot_l
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-ankle), "Scale":[1,1,1]})            # foot_r
+    return transforms
+
+
+def run_dummy_walk(fps: int = 30, speed_hz: float = 1.2, swing_deg: float = 30.0):
+    global skeleton_sent
+    if not skeleton_sent:
+        send_skeleton_structure()
+        skeleton_sent = True
+    start = time.time()
+    dt = 1.0 / max(1, int(fps))
+    try:
+        while True:
+            now = time.time()
+            t = (now - start) * float(speed_hz)  # cycles per second
+            transforms = build_dummy_walk_transforms(t, swing_deg=swing_deg)
+            send_frame_animation(transforms)
+            time.sleep(dt)
+    except KeyboardInterrupt:
+        return
+
 def map_2d_to_3d(
     keypoints_2d: np.ndarray,
     scale: float,
@@ -404,6 +462,14 @@ class GStreamerPoseEstimationApp(GStreamerApp):
 if __name__ == "__main__":
     user_data = user_app_callback_class()
     parser = get_default_parser()
+    # Dummy walk options
+    parser.add_argument('--dummy-walk', action='store_true', help='Send synthetic walk Live Link data instead of running pipeline')
+    parser.add_argument('--dummy-fps', type=int, default=30, help='Dummy walk FPS')
+    parser.add_argument('--dummy-speed', type=float, default=1.2, help='Dummy walk speed in cycles/sec')
+    parser.add_argument('--dummy-swing', type=float, default=30.0, help='Arm swing amplitude in degrees')
     args = parser.parse_args()
-    app = GStreamerPoseEstimationApp(args, user_data)
-    app.run()
+    if getattr(args, 'dummy_walk', False):
+        run_dummy_walk(fps=args.dummy_fps, speed_hz=args.dummy_speed, swing_deg=args.dummy_swing)
+    else:
+        app = GStreamerPoseEstimationApp(args, user_data)
+        app.run()

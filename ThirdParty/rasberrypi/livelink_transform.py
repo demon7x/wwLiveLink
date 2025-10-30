@@ -264,12 +264,13 @@ class TRCWriter:
     Minimal TRC writer for streaming. Writes header once, then appends frames.
     NumFrames in header is set to 0 (unknown). Tools usually tolerate it for prototyping.
     """
-    def __init__(self, filepath: str, marker_names: list[str], data_rate: float = 30.0, units: str = 'm'):
+    def __init__(self, filepath: str, marker_names: list[str], data_rate: float = 30.0, units: str = 'mm'):
         self.filepath = filepath
         self.marker_names = marker_names
         self.data_rate = float(data_rate)
         self.units = units
         self.frame_index = 0
+        self._scale_out = 1000.0 if self.units.lower() == 'mm' else 1.0
         self._ensure_header()
 
     def _ensure_header(self):
@@ -278,12 +279,15 @@ class TRCWriter:
         with open(self.filepath, 'w', encoding='utf-8') as f:
             fname = self.filepath.split('/')[-1]
             f.write(f"PathFileType\t4\t(X/Y/Z)\t{fname}\n")
-            f.write("DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStart\tOrigNumFrames\n")
+            f.write("DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStartFrame\tOrigNumFrames\n")
             f.write(f"{self.data_rate:.2f}\t{self.data_rate:.2f}\t0\t{len(self.marker_names)}\t{self.units}\t{self.data_rate:.2f}\t1\t0\n")
             # Columns
             f.write("Frame#\tTime\t" + "\t".join([f"{n}\t\t" for n in self.marker_names]).rstrip('\t') + "\n")
             # Sub-columns X Y Z for each marker
-            f.write("\t\t" + "\t\t\t".join(["X\tY\tZ"] * len(self.marker_names)) + "\n")
+            xyz_labels = []
+            for i in range(1, len(self.marker_names)+1):
+                xyz_labels.append(f"X{i}\tY{i}\tZ{i}")
+            f.write("\t\t" + "\t\t\t".join(xyz_labels) + "\n")
 
     def write_frame(self, points_3d: np.ndarray):
         """
@@ -300,11 +304,29 @@ class TRCWriter:
         t = self.frame_index / max(self.data_rate, 1e-6)
         cols = []
         for i in range(N):
-            x, y, z = float(pts[i, 0]), float(pts[i, 1]), float(pts[i, 2])
+            x, y, z = float(pts[i, 0])*self._scale_out, float(pts[i, 1])*self._scale_out, float(pts[i, 2])*self._scale_out
             cols.extend([f"{x:.6f}", f"{y:.6f}", f"{z:.6f}"])
         with open(self.filepath, 'a', encoding='utf-8') as f:
             f.write(f"{self.frame_index+1:d}\t{t:.6f}\t" + "\t".join(cols) + "\n")
         self.frame_index += 1
+
+    def finalize(self):
+        """Rewrite NumFrames and OrigNumFrames after streaming ends."""
+        try:
+            with open(self.filepath, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            if len(lines) < 3:
+                return
+            # second line: DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStartFrame\tOrigNumFrames
+            parts = lines[1].strip().split('\t')
+            if len(parts) >= 8:
+                parts[2] = str(self.frame_index)  # NumFrames
+                parts[7] = str(self.frame_index)  # OrigNumFrames
+                lines[1] = "\t".join(parts) + "\n"
+                with open(self.filepath, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+        except Exception:
+            pass
 
 def compute_transforms(keypoints_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, height_m: float | None = None, floor_angle_deg: float | None = None, direction: str = 'side') -> list:
     """

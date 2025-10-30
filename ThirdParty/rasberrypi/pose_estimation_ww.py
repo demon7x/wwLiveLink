@@ -21,6 +21,7 @@ import socket
 import json
 from scipy.spatial.transform import Rotation as R
 import livelink_transform
+import atexit
 
 # UDP 설정 (필요시 수정)
 UDP_IP = "192.168.0.255"  # 브로드캐스트 주소
@@ -524,8 +525,10 @@ if __name__ == "__main__":
             filepath=args.save_trc,
             marker_names=livelink_transform.COCO_NAMES,
             data_rate=TRC_RATE,
-            units='m'
+            units='mm'
         )
+        # finalize header on exit
+        atexit.register(lambda: TRC_WRITER.finalize() if TRC_WRITER is not None else None)
     if getattr(args, 'dummy_walk', False):
         run_dummy_walk(fps=args.dummy_fps, speed_hz=args.dummy_speed, swing_deg=args.dummy_swing)
     else:

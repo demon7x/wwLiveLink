@@ -43,20 +43,19 @@ def send_skeleton_structure():
     skeleton_message = {
         "mycharacter3": [
             {"Type": "CharacterSubject"},
-            {"Name": "root", "Parent": "-1"},              # 1
-            {"Name": "head", "Parent": "1"},               # 2
-            {"Name": "upperarm_l", "Parent": "2"},         # 3
-            {"Name": "upperarm_r", "Parent": "2"},         # 4
-            {"Name": "lowerarm_l", "Parent": "3"},         # 5
-            {"Name": "lowerarm_r", "Parent": "4"},         # 6
-            {"Name": "hand_l", "Parent": "5"},             # 7
-            {"Name": "hand_r", "Parent": "6"},             # 8
-            {"Name": "thigh_l", "Parent": "1"},            # 9
-            {"Name": "thigh_r", "Parent": "1"},            # 10
-            {"Name": "calf_l", "Parent": "9"},             # 11
-            {"Name": "calf_r", "Parent": "10"},            # 12
-            {"Name": "foot_l", "Parent": "11"},            # 13
-            {"Name": "foot_r", "Parent": "12"},            # 14
+            {"Name": "head", "Parent": "-1"},
+            {"Name": "upperarm_l", "Parent": "1"},
+            {"Name": "upperarm_r", "Parent": "1"},
+            {"Name": "lowerarm_l", "Parent": "2"},
+            {"Name": "lowerarm_r", "Parent": "3"},
+            {"Name": "hand_l", "Parent": "4"},
+            {"Name": "hand_r", "Parent": "5"},
+            {"Name": "thigh_l", "Parent": "1"},
+            {"Name": "thigh_r", "Parent": "1"},
+            {"Name": "calf_l", "Parent": "8"},
+            {"Name": "calf_r", "Parent": "9"},
+            {"Name": "foot_l", "Parent": "10"},
+            {"Name": "foot_r", "Parent": "11"},
         ]
     }
     msg = json.dumps(skeleton_message).encode('utf-8')
@@ -120,11 +119,10 @@ def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     }
 
     transforms = []
-    # Order must match skeleton: root, head, upperarm_l, upperarm_r, lowerarm_l, lowerarm_r,
+    # Order must match skeleton: head, upperarm_l, upperarm_r, lowerarm_l, lowerarm_r,
     # hand_l, hand_r, thigh_l, thigh_r, calf_l, calf_r, foot_l, foot_r
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})                                   # root
     # Use plausible local offsets so limbs don't cluster at root
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})                                   # head
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})                                   # head (root)
     # Arms extend along ±X from head; swing forward/back around local Y
     transforms.append({"Location":[-BONE_LENGTH['upperarm_l'],0,0], "Rotation": _yrot_quat(+arm), "Scale":[1,1,1]})         # upperarm_l (left)
     transforms.append({"Location":[+BONE_LENGTH['upperarm_r'],0,0], "Rotation": _yrot_quat(-arm), "Scale":[1,1,1]})         # upperarm_r (right)

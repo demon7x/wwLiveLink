@@ -36,7 +36,6 @@ COCO_NAMES = [
 
 # Bone order expected by the sending side/skeleton definition
 BONE_ORDER = [
-    'root',
     'head',
     'upperarm_l', 'upperarm_r',
     'lowerarm_l', 'lowerarm_r',
@@ -256,47 +255,37 @@ def compute_transforms(keypoints_2d: np.ndarray, width: int, height: int, *, K: 
     """
     points_3d = compute_points3d(keypoints_2d, width, height)
 
-    # 부모 매핑: root가 최상위, head/arms는 head 계열, 다리는 root에 붙임
+    # 부모 매핑: head 최상위, 팔다리는 head/상위 팔/상위 다리 연결
     parents = {
-        'root': None,
-        'head': 'root',
+        'head': None,
         'upperarm_l': 'head',
         'upperarm_r': 'head',
         'lowerarm_l': 'upperarm_l',
         'lowerarm_r': 'upperarm_r',
         'hand_l': 'lowerarm_l',
         'hand_r': 'lowerarm_r',
-        'thigh_l': 'root',
-        'thigh_r': 'root',
+        'thigh_l': 'head',
+        'thigh_r': 'head',
         'calf_l': 'thigh_l',
         'calf_r': 'thigh_r',
         'foot_l': 'calf_l',
         'foot_r': 'calf_r',
     }
 
-    # 루트 위치: 양 발목 중점
-    root_pos = 0.5 * (points_3d[COCO["left_ankle"]] + points_3d[COCO["right_ankle"]])
-
     transforms = []
     for bone in BONE_ORDER:
         parent = parents[bone]
-        if parent is None:  # root
+        if parent is None:
             loc = [0.0, 0.0, 0.0]
             rot = [0.0, 0.0, 0.0, 1.0]
         else:
-            # 부모/자식 좌표 선택 (부모가 root면 root_pos 사용)
-            if parent == 'root':
-                p_pos = root_pos
-            else:
-                p_pos = points_3d[KEYPOINT_INDICES[parent]] if KEYPOINT_INDICES[parent] < len(points_3d) else None
-
-            c_pos = points_3d[KEYPOINT_INDICES[bone]] if KEYPOINT_INDICES[bone] < len(points_3d) else None
-
-            if p_pos is not None and c_pos is not None:
-                vec = c_pos - p_pos
+            c_idx = KEYPOINT_INDICES[bone]
+            p_idx = KEYPOINT_INDICES[parent]
+            if c_idx < len(points_3d) and p_idx < len(points_3d):
+                vec = points_3d[c_idx] - points_3d[p_idx]
                 length = float(np.linalg.norm(vec))
                 loc = [length, 0.0, 0.0]
-                rot = calculate_bone_rotation(p_pos, c_pos, is_thigh=(bone in ['thigh_l','thigh_r']))
+                rot = calculate_bone_rotation(points_3d[p_idx], points_3d[c_idx], is_thigh=(bone in ['thigh_l','thigh_r']))
             else:
                 loc = [0.0, 0.0, 0.0]
                 rot = [0.0, 0.0, 0.0, 1.0]

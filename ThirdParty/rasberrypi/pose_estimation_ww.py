@@ -28,6 +28,8 @@ UDP_PORT = 54321
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 skeleton_sent = False  # 스켈레톤 메시지 전송 여부 플래그
+TRC_WRITER = None
+TRC_RATE = 30.0
 
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pose_udp_log.txt')
 
@@ -414,6 +416,18 @@ def app_callback(pad, info, user_data):
                 )
                 
                 send_frame_animation(bone_transforms)
+
+                # TRC 저장: 변환된 3D 포인트(COCO 17)를 기록
+                if TRC_WRITER is not None:
+                    pts3d = livelink_transform.compute_points3d(
+                        keypoints_2d=points_2d,
+                        width=width,
+                        height=height,
+                        height_m=getattr(args, 's2d_height', None),
+                        floor_angle_deg=getattr(args, 's2d_floor', None),
+                        direction=getattr(args, 's2d_direction', 'side'),
+                    )
+                    TRC_WRITER.write_frame(pts3d)
                 
                 if user_data.use_frame:    
                     for point_2d in points_2d:
@@ -499,7 +513,19 @@ if __name__ == "__main__":
     parser.add_argument('--s2d-height', type=float, default=None, help='Subject height in meters for scale (Sports2D-like)')
     parser.add_argument('--s2d-floor', type=float, default=None, help='Floor angle in degrees (override auto)')
     parser.add_argument('--s2d-direction', type=str, default='side', choices=['side','front','back'], help='Camera view relative to subject')
+    # TRC export options
+    parser.add_argument('--save-trc', type=str, default=None, help='Path to save streaming TRC of mapped 3D COCO points')
+    parser.add_argument('--trc-rate', type=float, default=30.0, help='TRC DataRate (Hz)')
     args = parser.parse_args()
+    # init TRC writer if requested
+    if getattr(args, 'save_trc', None):
+        TRC_RATE = float(getattr(args, 'trc_rate', 30.0))
+        TRC_WRITER = livelink_transform.TRCWriter(
+            filepath=args.save_trc,
+            marker_names=livelink_transform.COCO_NAMES,
+            data_rate=TRC_RATE,
+            units='m'
+        )
     if getattr(args, 'dummy_walk', False):
         run_dummy_walk(fps=args.dummy_fps, speed_hz=args.dummy_speed, swing_deg=args.dummy_swing)
     else:

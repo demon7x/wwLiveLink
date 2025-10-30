@@ -26,6 +26,14 @@ COCO = {
     "left_knee":13, "right_knee":14, "left_ankle":15, "right_ankle":16
 }
 
+# Ordered COCO names for TRC export (17 markers)
+COCO_NAMES = [
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle",
+]
+
 # Bone order expected by the sending side/skeleton definition
 BONE_ORDER = [
     'head',
@@ -245,6 +253,58 @@ def get_bone_rotations(points_3d: np.ndarray) -> list:
             rotations.append([0.0, 0.0, 0.0, 1.0])
     return rotations
 
+
+def compute_points3d(keypoints_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, height_m: float | None = None, floor_angle_deg: float | None = None, direction: str = 'side') -> np.ndarray:
+    """Expose 3D point computation for TRC export/diagnostics."""
+    return map_2d_to_3d(keypoints_2d, width, height, K=K, height_m=height_m, floor_angle_deg=floor_angle_deg, direction=direction)
+
+
+class TRCWriter:
+    """
+    Minimal TRC writer for streaming. Writes header once, then appends frames.
+    NumFrames in header is set to 0 (unknown). Tools usually tolerate it for prototyping.
+    """
+    def __init__(self, filepath: str, marker_names: list[str], data_rate: float = 30.0, units: str = 'm'):
+        self.filepath = filepath
+        self.marker_names = marker_names
+        self.data_rate = float(data_rate)
+        self.units = units
+        self.frame_index = 0
+        self._ensure_header()
+
+    def _ensure_header(self):
+        if self.frame_index > 0:
+            return
+        with open(self.filepath, 'w', encoding='utf-8') as f:
+            fname = self.filepath.split('/')[-1]
+            f.write(f"PathFileType\t4\t(X/Y/Z)\t{fname}\n")
+            f.write("DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStart\tOrigNumFrames\n")
+            f.write(f"{self.data_rate:.2f}\t{self.data_rate:.2f}\t0\t{len(self.marker_names)}\t{self.units}\t{self.data_rate:.2f}\t1\t0\n")
+            # Columns
+            f.write("Frame#\tTime\t" + "\t".join([f"{n}\t\t" for n in self.marker_names]).rstrip('\t') + "\n")
+            # Sub-columns X Y Z for each marker
+            f.write("\t\t" + "\t\t\t".join(["X\tY\tZ"] * len(self.marker_names)) + "\n")
+
+    def write_frame(self, points_3d: np.ndarray):
+        """
+        points_3d: (N,3) in marker order matching marker_names.
+        Time computed from data_rate.
+        """
+        N = len(self.marker_names)
+        if points_3d.shape[0] < N:
+            # pad missing markers with zeros
+            pad = np.zeros((N - points_3d.shape[0], 3), dtype=float)
+            pts = np.vstack([points_3d, pad])
+        else:
+            pts = points_3d[:N]
+        t = self.frame_index / max(self.data_rate, 1e-6)
+        cols = []
+        for i in range(N):
+            x, y, z = float(pts[i, 0]), float(pts[i, 1]), float(pts[i, 2])
+            cols.extend([f"{x:.6f}", f"{y:.6f}", f"{z:.6f}"])
+        with open(self.filepath, 'a', encoding='utf-8') as f:
+            f.write(f"{self.frame_index+1:d}\t{t:.6f}\t" + "\t".join(cols) + "\n")
+        self.frame_index += 1
 
 def compute_transforms(keypoints_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None, height_m: float | None = None, floor_angle_deg: float | None = None, direction: str = 'side') -> list:
     """

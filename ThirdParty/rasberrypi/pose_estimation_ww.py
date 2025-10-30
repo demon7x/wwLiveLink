@@ -325,7 +325,6 @@ def app_callback(pad, info, user_data):
                     keypoints_2d=points_2d,
                     width=width,
                     height=height,
-                    scale=0.1424,
                 )
                 
                 send_frame_animation(bone_transforms)

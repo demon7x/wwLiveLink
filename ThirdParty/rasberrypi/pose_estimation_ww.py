@@ -92,23 +92,34 @@ def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     knee_r = 40.0 * max(0.0,  np.sin(phase))
     ankle = 5.0 * np.sin(phase + np.pi/4.0)
 
+    # Nominal bone lengths (units) so bones don't collapse at root
+    BONE_LENGTH = {
+        'head': 12.0,
+        'upperarm_l': 28.0, 'upperarm_r': 28.0,
+        'lowerarm_l': 26.0, 'lowerarm_r': 26.0,
+        'hand_l': 10.0, 'hand_r': 10.0,
+        'thigh_l': 40.0, 'thigh_r': 40.0,
+        'calf_l': 43.0, 'calf_r': 43.0,
+        'foot_l': 18.0, 'foot_r': 18.0,
+    }
+
     transforms = []
     # Order must match skeleton: head, upperarm_l, upperarm_r, lowerarm_l, lowerarm_r,
     # hand_l, hand_r, thigh_l, thigh_r, calf_l, calf_r, foot_l, foot_r
     # Location kept at zero; Rotation is quaternion [x,y,z,w]
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})                # head
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+arm), "Scale":[1,1,1]})               # upperarm_l
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-arm), "Scale":[1,1,1]})               # upperarm_r
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+arm_lo), "Scale":[1,1,1]})            # lowerarm_l
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-arm_lo), "Scale":[1,1,1]})            # lowerarm_r
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.2*arm_lo), "Scale":[1,1,1]})         # hand_l
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-0.2*arm_lo), "Scale":[1,1,1]})        # hand_r
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-leg), "Scale":[1,1,1]})               # thigh_l (opposite)
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+leg), "Scale":[1,1,1]})               # thigh_r
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+knee_l), "Scale":[1,1,1]})            # calf_l
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+knee_r), "Scale":[1,1,1]})            # calf_r
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(+ankle), "Scale":[1,1,1]})            # foot_l
-    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(-ankle), "Scale":[1,1,1]})            # foot_r
+    transforms.append({"Location":[0,0,0], "Rotation": _zrot_quat(0.0), "Scale":[1,1,1]})                                   # head (root)
+    transforms.append({"Location":[BONE_LENGTH['upperarm_l'],0,0], "Rotation": _zrot_quat(+arm), "Scale":[1,1,1]})          # upperarm_l
+    transforms.append({"Location":[BONE_LENGTH['upperarm_r'],0,0], "Rotation": _zrot_quat(-arm), "Scale":[1,1,1]})          # upperarm_r
+    transforms.append({"Location":[BONE_LENGTH['lowerarm_l'],0,0], "Rotation": _zrot_quat(+arm_lo), "Scale":[1,1,1]})       # lowerarm_l
+    transforms.append({"Location":[BONE_LENGTH['lowerarm_r'],0,0], "Rotation": _zrot_quat(-arm_lo), "Scale":[1,1,1]})       # lowerarm_r
+    transforms.append({"Location":[BONE_LENGTH['hand_l'],0,0], "Rotation": _zrot_quat(0.2*arm_lo), "Scale":[1,1,1]})        # hand_l
+    transforms.append({"Location":[BONE_LENGTH['hand_r'],0,0], "Rotation": _zrot_quat(-0.2*arm_lo), "Scale":[1,1,1]})       # hand_r
+    transforms.append({"Location":[BONE_LENGTH['thigh_l'],0,0], "Rotation": _zrot_quat(-leg), "Scale":[1,1,1]})             # thigh_l
+    transforms.append({"Location":[BONE_LENGTH['thigh_r'],0,0], "Rotation": _zrot_quat(+leg), "Scale":[1,1,1]})             # thigh_r
+    transforms.append({"Location":[BONE_LENGTH['calf_l'],0,0], "Rotation": _zrot_quat(+knee_l), "Scale":[1,1,1]})           # calf_l
+    transforms.append({"Location":[BONE_LENGTH['calf_r'],0,0], "Rotation": _zrot_quat(+knee_r), "Scale":[1,1,1]})           # calf_r
+    transforms.append({"Location":[BONE_LENGTH['foot_l'],0,0], "Rotation": _zrot_quat(+ankle), "Scale":[1,1,1]})            # foot_l
+    transforms.append({"Location":[BONE_LENGTH['foot_r'],0,0], "Rotation": _zrot_quat(-ankle), "Scale":[1,1,1]})            # foot_r
     return transforms
 
 

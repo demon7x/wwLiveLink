@@ -219,17 +219,55 @@ def get_bone_rotations(points_3d: np.ndarray) -> list:
 
 
 def compute_transforms(keypoints_2d: np.ndarray, width: int, height: int, *, K: tuple | None = None) -> list:
+    """
+    Build LOCAL bone transforms suitable for Live Link:
+      - Root (head) Location = [0,0,0], Rotation = identity
+      - Each child bone Location = [length,0,0] where length = |child-parent|
+      - Rotation aligns +X with (child-parent)
+    """
+    # 3D points in UE space (approximate)
     points_3d = map_2d_to_3d(keypoints_2d, width, height, K=K)
-    positions = get_bone_positions(points_3d)
-    rotations = get_bone_rotations(points_3d)
+
+    parents = {
+        'head': None,
+        'upperarm_l': 'head',
+        'upperarm_r': 'head',
+        'lowerarm_l': 'upperarm_l',
+        'lowerarm_r': 'upperarm_r',
+        'hand_l': 'lowerarm_l',
+        'hand_r': 'lowerarm_r',
+        'thigh_l': 'head',
+        'thigh_r': 'head',
+        'calf_l': 'thigh_l',
+        'calf_r': 'thigh_r',
+        'foot_l': 'calf_l',
+        'foot_r': 'calf_r',
+    }
 
     transforms = []
-    for i, bone in enumerate(BONE_ORDER):
+    for bone in BONE_ORDER:
+        parent = parents[bone]
+        if parent is None:
+            loc = [0.0, 0.0, 0.0]
+            rot = [0.0, 0.0, 0.0, 1.0]
+        else:
+            c_idx = KEYPOINT_INDICES[bone]
+            p_idx = KEYPOINT_INDICES[parent]
+            if c_idx < len(points_3d) and p_idx < len(points_3d):
+                vec = points_3d[c_idx] - points_3d[p_idx]
+                length = float(np.linalg.norm(vec))
+                loc = [length, 0.0, 0.0]
+                rot = calculate_bone_rotation(points_3d[p_idx], points_3d[c_idx], is_thigh=(bone in ['thigh_l','thigh_r']))
+            else:
+                loc = [0.0, 0.0, 0.0]
+                rot = [0.0, 0.0, 0.0, 1.0]
+
         transforms.append({
-            "Location": positions[i],
-            "Rotation": rotations[i],  # quaternion [x,y,z,w]
+            "Location": loc,
+            "Rotation": rot,
             "Scale": [1.0, 1.0, 1.0],
         })
+
     return transforms
 
 

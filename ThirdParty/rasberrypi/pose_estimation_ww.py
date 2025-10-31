@@ -113,6 +113,36 @@ def _euler_to_quat(pitch_deg: float, yaw_deg: float, roll_deg: float):
     qx = _xrot_quat(roll_deg)
     return _mul_quat(_mul_quat(qz, qy), qx)
 
+def _quat_slerp(q0, q1, t: float):
+    # Normalize
+    import math
+    x0,y0,z0,w0 = q0
+    x1,y1,z1,w1 = q1
+    dot = x0*x1 + y0*y1 + z0*z1 + w0*w1
+    if dot < 0.0:
+        x1,y1,z1,w1 = -x1,-y1,-z1,-w1
+        dot = -dot
+    DOT_THRESHOLD = 0.9995
+    if dot > DOT_THRESHOLD:
+        # LERP and normalize
+        x = x0 + t*(x1-x0)
+        y = y0 + t*(y1-y0)
+        z = z0 + t*(z1-z0)
+        w = w0 + t*(w1-w0)
+        norm = math.sqrt(x*x+y*y+z*z+w*w) + 1e-9
+        return [x/norm, y/norm, z/norm, w/norm]
+    theta_0 = math.acos(dot)
+    sin_theta_0 = math.sin(theta_0)
+    theta = theta_0 * t
+    sin_theta = math.sin(theta)
+    s0 = math.cos(theta) - dot * sin_theta / (sin_theta_0 + 1e-9)
+    s1 = sin_theta / (sin_theta_0 + 1e-9)
+    x = (s0*x0) + (s1*x1)
+    y = (s0*y0) + (s1*y1)
+    z = (s0*z0) + (s1*z1)
+    w = (s0*w0) + (s1*w1)
+    return [x, y, z, w]
+
 
 def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     # 일반 걷기 사이클
@@ -152,11 +182,12 @@ def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     transforms.append({"Location":[BONE_LENGTH['calf_r'],0,0], "Rotation": _xrot_quat(+knee_r), "Scale":[1,1,1]})    # calf_r
     transforms.append({"Location":[BONE_LENGTH['foot_l'],0,0], "Rotation": _xrot_quat(+ankle), "Scale":[1,1,1]})     # foot_l
     transforms.append({"Location":[BONE_LENGTH['foot_r'],0,0], "Rotation": _xrot_quat(-ankle), "Scale":[1,1,1]})     # foot_r
-    # Override thigh_l using provided reference (location+rotation) with Y swing
+    # Override thigh_l using provided reference location and absolute key rotations (slerp)
     ref_loc = [-3.231992, 0.068032, -11.154586]
-    ref_rot = _euler_to_quat(2.390187, 4.797492, 8.475469)  # Pitch,Yaw,Roll(deg)
-    thigh_l_swing = 20.0 * np.sin(phase)
-    thigh_l_rot = _mul_quat(_xrot_quat(thigh_l_swing), ref_rot)
+    q_fwd = _euler_to_quat(6.300676, -25.042015, 6.161133)  # foot forward
+    q_back = _euler_to_quat(0.888115, 14.688037, 8.759123)  # foot backward
+    alpha = 0.5 * (np.sin(phase) + 1.0)  # 0..1
+    thigh_l_rot = _quat_slerp(q_back, q_fwd, float(alpha))
     # index 7 is thigh_l in our ordering
     transforms[7] = {"Location": ref_loc, "Rotation": thigh_l_rot, "Scale": [1,1,1]}
     return transforms

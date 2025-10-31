@@ -106,6 +106,13 @@ def _mul_quat(q1, q2):
         w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
     ]
 
+def _euler_to_quat(pitch_deg: float, yaw_deg: float, roll_deg: float):
+    # UE Rotator(Pitch,Yaw,Roll) → quat approx: Yaw(Z) * Pitch(Y) * Roll(X)
+    qz = _zrot_quat(yaw_deg)
+    qy = _yrot_quat(pitch_deg)
+    qx = _xrot_quat(roll_deg)
+    return _mul_quat(_mul_quat(qz, qy), qx)
+
 
 def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     # 일반 걷기 사이클
@@ -145,6 +152,13 @@ def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     transforms.append({"Location":[BONE_LENGTH['calf_r'],0,0], "Rotation": _xrot_quat(+knee_r), "Scale":[1,1,1]})    # calf_r
     transforms.append({"Location":[BONE_LENGTH['foot_l'],0,0], "Rotation": _xrot_quat(+ankle), "Scale":[1,1,1]})     # foot_l
     transforms.append({"Location":[BONE_LENGTH['foot_r'],0,0], "Rotation": _xrot_quat(-ankle), "Scale":[1,1,1]})     # foot_r
+    # Override thigh_l using provided reference (location+rotation) with Y swing
+    ref_loc = [-3.231992, 0.068032, -11.154586]
+    ref_rot = _euler_to_quat(2.390187, 4.797492, 8.475469)  # Pitch,Yaw,Roll(deg)
+    thigh_l_swing = 20.0 * np.sin(phase)
+    thigh_l_rot = _mul_quat(_yrot_quat(thigh_l_swing), ref_rot)
+    # index 7 is thigh_l in our ordering
+    transforms[7] = {"Location": ref_loc, "Rotation": thigh_l_rot, "Scale": [1,1,1]}
     return transforms
 
 

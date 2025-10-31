@@ -156,7 +156,7 @@ def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     ref_loc = [-3.231992, 0.068032, -11.154586]
     ref_rot = _euler_to_quat(2.390187, 4.797492, 8.475469)  # Pitch,Yaw,Roll(deg)
     thigh_l_swing = 20.0 * np.sin(phase)
-    thigh_l_rot = _mul_quat(_yrot_quat(thigh_l_swing), ref_rot)
+    thigh_l_rot = _mul_quat(_xrot_quat(thigh_l_swing), ref_rot)
     # index 7 is thigh_l in our ordering
     transforms[7] = {"Location": ref_loc, "Rotation": thigh_l_rot, "Scale": [1,1,1]}
     return transforms

@@ -108,7 +108,7 @@ def _mul_quat(q1, q2):
 
 
 def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
-    # 정적 기본 자세(아이덴티티 회전) 더미 데이터
+    # 정적 기본 자세 - Location과 Rotation 모두 0으로 전송
 
     # Nominal bone lengths (units) so bones don't collapse at root
     BONE_LENGTH = {
@@ -124,20 +124,20 @@ def build_dummy_walk_transforms(t: float, swing_deg: float = 30.0) -> list:
     transforms = []
     # 본 순서 고정: head, upperarm_l, upperarm_r, lowerarm_l, lowerarm_r,
     # hand_l, hand_r, thigh_l, thigh_r, calf_l, calf_r, foot_l, foot_r
-    ident = _zrot_quat(0.0)
-    transforms.append({"Location":[0,0,0], "Rotation": ident, "Scale":[1,1,1]})                                              # head
-    transforms.append({"Location":[BONE_LENGTH['upperarm_l'],0,0], "Rotation": ident, "Scale":[1,1,1]})                      # upperarm_l
-    transforms.append({"Location":[BONE_LENGTH['upperarm_r'],0,0], "Rotation": ident, "Scale":[1,1,1]})                      # upperarm_r
-    transforms.append({"Location":[BONE_LENGTH['lowerarm_l'],0,0], "Rotation": ident, "Scale":[1,1,1]})                      # lowerarm_l
-    transforms.append({"Location":[BONE_LENGTH['lowerarm_r'],0,0], "Rotation": ident, "Scale":[1,1,1]})                      # lowerarm_r
-    transforms.append({"Location":[BONE_LENGTH['hand_l'],0,0], "Rotation": ident, "Scale":[1,1,1]})                           # hand_l
-    transforms.append({"Location":[BONE_LENGTH['hand_r'],0,0], "Rotation": ident, "Scale":[1,1,1]})                           # hand_r
-    transforms.append({"Location":[BONE_LENGTH['thigh_l'],0,0], "Rotation": ident, "Scale":[1,1,1]})                          # thigh_l
-    transforms.append({"Location":[BONE_LENGTH['thigh_r'],0,0], "Rotation": ident, "Scale":[1,1,1]})                          # thigh_r
-    transforms.append({"Location":[BONE_LENGTH['calf_l'],0,0], "Rotation": ident, "Scale":[1,1,1]})                           # calf_l
-    transforms.append({"Location":[BONE_LENGTH['calf_r'],0,0], "Rotation": ident, "Scale":[1,1,1]})                           # calf_r
-    transforms.append({"Location":[BONE_LENGTH['foot_l'],0,0], "Rotation": ident, "Scale":[1,1,1]})                           # foot_l
-    transforms.append({"Location":[BONE_LENGTH['foot_r'],0,0], "Rotation": ident, "Scale":[1,1,1]})                           # foot_r
+    zero_rot = [0.0, 0.0, 0.0, 0.0]
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # head
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # upperarm_l
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # upperarm_r
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # lowerarm_l
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # lowerarm_r
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # hand_l
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # hand_r
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # thigh_l
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # thigh_r
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # calf_l
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # calf_r
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # foot_l
+    transforms.append({"Location":[0,0,0], "Rotation": zero_rot, "Scale":[1,1,1]})                                           # foot_r
     return transforms
 
 
